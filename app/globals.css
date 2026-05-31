@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; color: #18121F; }
+input, select, textarea { font-size: 16px; }
