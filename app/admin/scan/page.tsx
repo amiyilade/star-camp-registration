@@ -5,7 +5,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { createClient } from "@/lib/supabase/client";
 
 
-type ScannerAction = "check-in" | "check-out" | "lookup";
+type ScannerAction = "check-in" | "check-out";
 type WorkflowMode = "solo" | "badge-queue";
 
 export default function AdminScanPage() {
@@ -113,12 +113,6 @@ export default function AdminScanPage() {
   async function processScannedTicket(scannedText: string) {
     if (processing) return;
 
-    if (resultHoldSeconds !== "manual") {
-      resultTimerRef.current = setTimeout(() => {
-        continueScanning();
-      }, resultHoldSeconds * 1000);
-    }
-
     const token = extractTokenFromScan(scannedText);
     const now = Date.now();
 
@@ -141,12 +135,6 @@ export default function AdminScanPage() {
 
       const verifiedTicket = await verifyTicket(token);
 
-      if (scannerAction === "lookup") {
-        setTicket(verifiedTicket);
-        setResultMessage("Ticket verified.");
-        return;
-      }
-
       const updatedTicket = await performTicketAction(
         verifiedTicket.id,
         scannerAction
@@ -166,6 +154,12 @@ export default function AdminScanPage() {
             : "Checked in. Write badge, then tap to continue."
           : "Checked out."
       );
+
+      if (resultHoldSeconds !== "manual") {
+        resultTimerRef.current = setTimeout(() => {
+          continueScanning();
+        }, resultHoldSeconds * 1000);
+      }
     } catch (error) {
       setLookupError(
         error instanceof Error ? error.message : "Something went wrong."
@@ -338,45 +332,8 @@ export default function AdminScanPage() {
           </div>
       </details>
 
-        <section className="mt-8 rounded-[2rem] border border-purple-100 bg-white p-6 shadow-soft">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="text-sm font-semibold text-royalDark">
-                Scanner action
-              </label>
-
-              <select
-                value={scannerAction}
-                onChange={(event) =>
-                  setScannerAction(event.target.value as ScannerAction)
-                }
-                className="mt-2 w-full rounded-2xl border border-purple-100 px-4 py-3"
-              >
-                <option value="check-in">Check-in mode</option>
-                <option value="check-out">Check-out mode</option>
-                <option value="lookup">Lookup only</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-semibold text-royalDark">
-                Workflow model
-              </label>
-
-              <select
-                value={workflowMode}
-                onChange={(event) =>
-                  setWorkflowMode(event.target.value as WorkflowMode)
-                }
-                className="mt-2 w-full rounded-2xl border border-purple-100 px-4 py-3"
-              >
-                <option value="solo">Solo volunteer</option>
-                <option value="badge-queue">Badge queue desk</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-6 flex gap-3">
+        <section className="mt-4 rounded-[2rem] border border-purple-100 bg-white p-4 shadow-soft">
+          <div className="flex gap-3">
             {!scannerRunning ? (
               <button
                 type="button"
@@ -398,9 +355,9 @@ export default function AdminScanPage() {
 
           <div
             id="qr-reader"
-            className="mt-6 overflow-hidden rounded-3xl border border-purple-100"
+            className="mt-4 overflow-hidden rounded-3xl border border-purple-100"
           />
-        </section>
+      </section>
 
         {ticket && (
         <button
