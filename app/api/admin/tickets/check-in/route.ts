@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await assignTeam(ticket.id, ticket.event_id);
+    await assignTeam(ticket.id);
 
     const now = new Date().toISOString();
 
