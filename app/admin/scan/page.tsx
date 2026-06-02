@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { createClient } from "@/lib/supabase/client";
 
+
 type ScannerAction = "check-in" | "check-out" | "lookup";
 type WorkflowMode = "solo" | "badge-queue";
 
@@ -23,6 +24,9 @@ export default function AdminScanPage() {
 
   const qrRef = useRef<Html5Qrcode | null>(null);
   const lastScanRef = useRef<{ token: string; time: number } | null>(null);
+
+  const [resultHoldSeconds, setResultHoldSeconds] = useState<number | "manual">("manual");
+  const resultTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const savedAction = localStorage.getItem("scannerAction") as ScannerAction | null;
@@ -108,6 +112,12 @@ export default function AdminScanPage() {
 
   async function processScannedTicket(scannedText: string) {
     if (processing) return;
+
+    if (resultHoldSeconds !== "manual") {
+      resultTimerRef.current = setTimeout(() => {
+        continueScanning();
+      }, resultHoldSeconds * 1000);
+    }
 
     const token = extractTokenFromScan(scannedText);
     const now = Date.now();
@@ -198,6 +208,10 @@ export default function AdminScanPage() {
     setTicket(null);
     setResultMessage(null);
     setLookupError(null);
+    if (resultTimerRef.current) {
+      clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
 
     try {
       qrRef.current?.resume();
@@ -277,6 +291,53 @@ export default function AdminScanPage() {
           </button>
         </div>
 
+        <details className="mb-4 rounded-2xl border border-purple-100 bg-white p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-royal">
+            Scanner settings
+          </summary>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <select
+              value={scannerAction}
+              onChange={(event) =>
+                setScannerAction(event.target.value as ScannerAction)
+              }
+              className="rounded-2xl border border-purple-100 px-4 py-3"
+            >
+              <option value="check-in">Check-in</option>
+              <option value="check-out">Check-out</option>
+            </select>
+
+            <select
+              value={workflowMode}
+              onChange={(event) =>
+                setWorkflowMode(event.target.value as WorkflowMode)
+              }
+              className="rounded-2xl border border-purple-100 px-4 py-3"
+            >
+              <option value="solo">Solo volunteer</option>
+              <option value="badge-queue">Badge queue</option>
+            </select>
+
+            <select
+              value={resultHoldSeconds}
+              onChange={(event) => {
+                const value = event.target.value;
+                setResultHoldSeconds(value === "manual" ? "manual" : Number(value));
+              }}
+              className="rounded-2xl border border-purple-100 px-4 py-3"
+            >
+              <option value="manual">Tap to continue</option>
+              <option value="5">Auto continue: 5s</option>
+              <option value="10">Auto continue: 10s</option>
+              <option value="15">Auto continue: 15s</option>
+              <option value="30">Auto continue: 30s</option>
+              <option value="60">Auto continue: 60s</option>
+              <option value="120">Auto continue: 120s</option>
+            </select>
+          </div>
+      </details>
+
         <section className="mt-8 rounded-[2rem] border border-purple-100 bg-white p-6 shadow-soft">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -341,6 +402,60 @@ export default function AdminScanPage() {
           />
         </section>
 
+        {ticket && (
+        <button
+          type="button"
+          onClick={continueScanning}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 text-left"
+        >
+          <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 text-center shadow-2xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-royal">
+              {resultMessage}
+            </p>
+
+            <h2 className="mt-4 text-4xl font-black text-royalDark">
+              {attendee?.first_name} {attendee?.last_name}
+            </h2>
+
+            <div className="mt-6 rounded-[2rem] bg-lavender p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-muted">
+                Team
+              </p>
+
+              <p className="mt-2 text-5xl font-black text-royal">
+                {team?.name ?? "Not assigned"}
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-purple-100 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                  Department
+                </p>
+                <p className="mt-2 text-lg font-bold text-royalDark">
+                  {attendee?.department ?? "—"}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-purple-100 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                  Age Group
+                </p>
+                <p className="mt-2 text-lg font-bold text-royalDark">
+                  {attendee?.age_at_registration < 20 ? "Under 20" : "20 or older"}
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-6 text-sm font-semibold text-muted">
+              {resultHoldSeconds === "manual"
+                ? "Tap anywhere to continue scanning."
+                : `Auto-continues in ${resultHoldSeconds} seconds. Tap to continue now.`}
+            </p>
+          </div>
+        </button>
+      )}
+
         <form
           onSubmit={handleManualLookup}
           className="mt-6 rounded-[2rem] border border-purple-100 bg-white p-6 shadow-soft"
@@ -387,68 +502,6 @@ export default function AdminScanPage() {
           </button>
         )}
 
-        {ticket && (
-          <button
-            type="button"
-            onClick={continueScanning}
-            className="mt-6 w-full rounded-[2rem] border border-purple-100 bg-white p-8 text-left shadow-soft"
-          >
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-royal">
-              {resultMessage}
-            </p>
-
-            <h2 className="mt-4 text-4xl font-bold text-royalDark">
-              {attendee?.first_name} {attendee?.last_name}
-            </h2>
-
-            <div className="mt-6 rounded-[2rem] bg-lavender p-6 text-center">
-              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-muted">
-                Assigned Team
-              </p>
-
-              <p className="mt-2 text-4xl font-black text-royal">
-                {team?.name ?? "Not assigned"}
-              </p>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <Info label="Event" value={event?.name} />
-              <Info label="Ticket Code" value={ticket.ticket_code} />
-              <Info
-                label="Age"
-                value={
-                  attendee?.age_at_registration != null
-                    ? String(attendee.age_at_registration)
-                    : "—"
-                }
-              />
-              <Info label="Department" value={attendee?.department} />
-              <Info
-                label="Status"
-                value={
-                  ticket.checked_in_at &&
-                  (!ticket.checked_out_at ||
-                    new Date(ticket.checked_in_at) >
-                      new Date(ticket.checked_out_at))
-                    ? "Currently checked in"
-                    : ticket.checked_out_at
-                      ? "Checked out"
-                      : "Not checked in"
-                }
-              />
-              <Info
-                label="Phone"
-                value={`${attendee?.phone_country_code ?? ""} ${
-                  attendee?.phone_number ?? ""
-                }`}
-              />
-            </div>
-
-            <p className="mt-6 text-center text-sm font-semibold text-muted">
-              Tap anywhere on this card to continue scanning.
-            </p>
-          </button>
-        )}
       </div>
     </main>
   );

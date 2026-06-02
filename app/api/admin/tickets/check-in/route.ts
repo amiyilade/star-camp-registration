@@ -92,13 +92,23 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
 
-    const { data: updatedTicket, error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from("tickets")
       .update({
         checked_in_at: now,
         checked_out_at: null
       })
-      .eq("id", ticket.id)
+      .eq("id", ticket.id);
+
+    if (updateError) {
+      return NextResponse.json(
+        { error: "Could not check in ticket." },
+        { status: 500 }
+      );
+    }
+
+    const { data: updatedTicket, error: refetchError } = await supabaseAdmin
+      .from("tickets")
       .select(`
         id,
         ticket_code,
@@ -111,12 +121,13 @@ export async function POST(request: NextRequest) {
           name
         )
       `)
+      .eq("id", ticket.id)
       .single();
 
-    if (updateError || !updatedTicket) {
+    if (refetchError || !updatedTicket) {
       return NextResponse.json(
-        { error: "Could not check in ticket. It may have already been checked in." },
-        { status: 409 }
+        { error: "Ticket checked in, but could not reload team assignment." },
+        { status: 500 }
       );
     }
 
