@@ -79,13 +79,39 @@ export async function POST(request: NextRequest) {
         admin_user_id: access.admin.id,
         admin_email: access.admin.email,
         action: "duplicate_attempt",
-        notes: "Duplicate check-in attempt."
+        notes: "Ticket was scanned again while already checked in."
       });
 
-      return NextResponse.json(
-        { error: "This ticket has already been checked in." },
-        { status: 409 }
-      );
+      const { data: existingTicket, error: existingTicketError } =
+        await supabaseAdmin
+          .from("tickets")
+          .select(`
+            id,
+            ticket_code,
+            status,
+            checked_in_at,
+            checked_out_at,
+            teams:assigned_team_id (
+              id,
+              code,
+              name
+            )
+          `)
+          .eq("id", ticket.id)
+          .single();
+
+      if (existingTicketError || !existingTicket) {
+        return NextResponse.json(
+          { error: "Ticket is already checked in, but could not reload details." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        message: "Already checked in.",
+        alreadyCheckedIn: true,
+        ticket: existingTicket
+      });
     }
 
     await assignTeam(ticket.id);

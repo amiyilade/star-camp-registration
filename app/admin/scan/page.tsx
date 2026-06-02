@@ -107,7 +107,7 @@ export default function AdminScanPage() {
       throw new Error(result.error ?? "Action failed.");
     }
 
-    return result.ticket;
+    return result;
   }
 
   async function processScannedTicket(scannedText: string) {
@@ -142,17 +142,19 @@ export default function AdminScanPage() {
 
       setTicket({
         ...verifiedTicket,
-        checked_in_at: updatedTicket.checked_in_at,
-        checked_out_at: updatedTicket.checked_out_at,
-        teams: updatedTicket.teams ?? verifiedTicket.teams
+        checked_in_at: updatedTicket.ticket.checked_in_at,
+        checked_out_at: updatedTicket.ticket.checked_out_at,
+        teams: updatedTicket.ticket.teams ?? verifiedTicket.teams
       });
 
       setResultMessage(
-        scannerAction === "check-in"
-          ? workflowMode === "badge-queue"
-            ? "Checked in. Send to badge desk."
-            : "Checked in. Write badge, then tap to continue."
-          : "Checked out."
+        updatedTicket.alreadyCheckedIn
+          ? "Already checked in."
+          : scannerAction === "check-in"
+            ? workflowMode === "badge-queue"
+              ? "Checked in. Send to badge desk."
+              : "Checked in. Write badge, then tap to continue."
+            : "Checked out."
       );
 
       if (resultHoldSeconds !== "manual") {
