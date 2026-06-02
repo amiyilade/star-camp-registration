@@ -24,9 +24,11 @@ export default function AdminScanPage() {
 
   const qrRef = useRef<Html5Qrcode | null>(null);
   const lastScanRef = useRef<{ token: string; time: number } | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [resultHoldSeconds, setResultHoldSeconds] = useState<number | "manual">("manual");
   const resultTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
 
   useEffect(() => {
     const savedAction = localStorage.getItem("scannerAction") as ScannerAction | null;
@@ -157,11 +159,8 @@ export default function AdminScanPage() {
             : "Checked out."
       );
 
-      if (resultHoldSeconds !== "manual") {
-        resultTimerRef.current = setTimeout(() => {
-          continueScanning();
-        }, resultHoldSeconds * 1000);
-      }
+      startResultCountdown();
+
     } catch (error) {
       setLookupError(
         error instanceof Error ? error.message : "Something went wrong."
@@ -204,16 +203,50 @@ export default function AdminScanPage() {
     setTicket(null);
     setResultMessage(null);
     setLookupError(null);
-    if (resultTimerRef.current) {
-      clearTimeout(resultTimerRef.current);
-      resultTimerRef.current = null;
-    }
+
+    clearResultTimers();
 
     try {
       qrRef.current?.resume();
     } catch {
       // ignore resume failures
     }
+  }
+
+  function clearResultTimers() {
+    if (resultTimerRef.current) {
+      clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+
+    setCountdownSeconds(null);
+  }
+
+  function startResultCountdown() {
+    if (resultHoldSeconds === "manual") return;
+
+    clearResultTimers();
+
+    setCountdownSeconds(resultHoldSeconds);
+
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdownSeconds((current) => {
+        if (current === null) return null;
+
+        if (current <= 1) {
+          clearResultTimers();
+          continueScanning();
+          return null;
+        }
+
+        return current - 1;
+      });
+    }, 1000);
   }
 
   async function handleManualLookup(event: React.FormEvent<HTMLFormElement>) {
@@ -409,7 +442,7 @@ export default function AdminScanPage() {
             <p className="mt-6 text-sm font-semibold text-muted">
               {resultHoldSeconds === "manual"
                 ? "Tap anywhere to continue scanning."
-                : `Auto-continues in ${resultHoldSeconds} seconds. Tap to continue now.`}
+                : `Auto-continues in ${countdownSeconds ?? resultHoldSeconds} seconds. Tap to continue now.`}
             </p>
           </div>
         </button>
