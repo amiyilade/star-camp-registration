@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { createClient } from "@/lib/supabase/client";
+import { AdminShell } from "@/components/AdminShell";
 
 
 type ScannerAction = "check-in" | "check-out";
@@ -296,8 +297,8 @@ export default function AdminScanPage() {
     : ticket?.teams;
 
   return (
-    <main className="min-h-screen bg-lavender px-6 py-8">
-      <div className="mx-auto max-w-4xl">
+    <AdminShell>
+      <div className="max-w-4xl">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-royal">
@@ -495,7 +496,7 @@ export default function AdminScanPage() {
         )}
 
       </div>
-    </main>
+    </AdminShell>
   );
 }
 

@@ -4,6 +4,7 @@ import { getAdminUser } from "@/lib/auth/get-admin-user";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { AdminCreateForm } from "@/components/AdminCreateForm";
 import { AdminEditCard } from "@/components/AdminEditCard";
+import { AdminShell } from "@/components/AdminShell";
 
 export default async function AdminManagePage() {
   const admin = await getAdminUser();
@@ -37,8 +38,8 @@ export default async function AdminManagePage() {
   }
 
   return (
-    <main className="min-h-screen bg-lavender px-6 py-10">
-      <div className="mx-auto max-w-6xl">
+    <AdminShell>
+      <div>
         <div className="mb-10">
           <h1 className="text-4xl font-semibold text-royalDark">
             Admin Management
@@ -58,6 +59,6 @@ export default async function AdminManagePage() {
         </div>
         </div>
       </div>
-    </main>
+    </AdminShell>
   );
 }

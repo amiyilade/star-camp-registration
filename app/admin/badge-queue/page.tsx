@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminShell } from "@/components/AdminShell";
 
 const EVENTS = [
   { slug: "abuja-2026", label: "STAR Camp Abuja" },
@@ -72,8 +73,8 @@ export default function BadgeQueuePage() {
   }, [eventSlug]);
 
   return (
-    <main className="min-h-screen bg-lavender px-6 py-8">
-      <div className="mx-auto max-w-6xl">
+    <AdminShell>
+      <div>
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-royal">
@@ -192,6 +193,6 @@ export default function BadgeQueuePage() {
           )}
         </div>
       </div>
-    </main>
+    </AdminShell>
   );
 }
