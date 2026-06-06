@@ -19,6 +19,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
 
+  if (!admin.is_super_admin) {
+    return NextResponse.json(
+        { error: "Not authorized." },
+        { status: 403 }
+    );
+}
+
   const eventSlug =
     request.nextUrl.searchParams.get("eventSlug") ?? "abuja-2026";
 

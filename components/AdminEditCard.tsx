@@ -10,9 +10,6 @@ const EVENTS = [
 export function AdminEditCard({ admin }: { admin: any }) {
   const [fullName, setFullName] = useState(admin.full_name ?? "");
   const [isSuperAdmin, setIsSuperAdmin] = useState(admin.is_super_admin);
-  const [role, setRole] = useState<"scanner" | "manager">(
-    admin.admin_event_roles?.[0]?.role ?? "scanner"
-  );
   const [eventSlugs, setEventSlugs] = useState<string[]>(
     admin.admin_event_roles
       ?.filter((item: any) => item.is_active)
@@ -44,7 +41,7 @@ export function AdminEditCard({ admin }: { admin: any }) {
           email: admin.email,
           fullName,
           isSuperAdmin,
-          role,
+          role:"scanner",
           eventSlugs
         })
       });
@@ -79,16 +76,6 @@ export function AdminEditCard({ admin }: { admin: any }) {
           className="rounded-2xl border border-purple-100 px-4 py-3"
           placeholder="Full name"
         />
-
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as "scanner" | "manager")}
-          disabled={isSuperAdmin}
-          className="rounded-2xl border border-purple-100 px-4 py-3"
-        >
-          <option value="scanner">Scanner</option>
-          <option value="manager">Manager</option>
-        </select>
 
         <label className="flex items-center gap-3 rounded-2xl border border-purple-100 px-4 py-3">
           <input

@@ -27,6 +27,16 @@ export default function AdminDashboardPage() {
       const result = await response.json();
 
       if (!response.ok) {
+        if (response.status === 403) {
+            window.location.href = "/admin/scan";
+            return;
+        }
+
+        if (response.status === 401) {
+            window.location.href = "/admin/login";
+            return;
+        }
+
         setError(result.error ?? "Could not load dashboard.");
         return;
       }
@@ -37,7 +47,7 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }
+ }
 
   useEffect(() => {
     loadDashboard();

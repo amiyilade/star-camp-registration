@@ -10,7 +10,6 @@ const EVENTS = [
 export function AdminCreateForm() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<"scanner" | "manager">("scanner");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [eventSlugs, setEventSlugs] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -39,7 +38,7 @@ export function AdminCreateForm() {
         body: JSON.stringify({
           email,
           fullName,
-          role,
+          role:"scanner",
           isSuperAdmin,
           eventSlugs
         })
@@ -55,7 +54,6 @@ export function AdminCreateForm() {
       setStatus("Admin saved successfully.");
       setEmail("");
       setFullName("");
-      setRole("scanner");
       setIsSuperAdmin(false);
       setEventSlugs([]);
 
@@ -94,16 +92,6 @@ export function AdminCreateForm() {
           onChange={(e) => setFullName(e.target.value)}
           className="rounded-2xl border border-purple-100 px-4 py-3"
         />
-
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as "scanner" | "manager")}
-          disabled={isSuperAdmin}
-          className="rounded-2xl border border-purple-100 px-4 py-3"
-        >
-          <option value="scanner">Scanner</option>
-          <option value="manager">Manager</option>
-        </select>
 
         <label className="flex items-center gap-3 rounded-2xl border border-purple-100 px-4 py-3">
           <input
