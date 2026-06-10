@@ -51,15 +51,25 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <main className="min-h-screen bg-lavender">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 lg:flex-row">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row">
         <aside
-          className={`lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] transition-all ${
-            collapsed ? "lg:w-20" : "lg:w-64"
+          className={`transition-all lg:sticky lg:top-4 lg:self-start ${
+            collapsed ? "lg:w-14" : "lg:w-64"
           }`}
         >
-          <div className="rounded-[2rem] border border-purple-100 bg-white p-4 shadow-soft">
-            <div className="flex items-center justify-between gap-3">
-              {!collapsed && (
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={() => setCollapsed(false)}
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-purple-100 bg-white text-xl font-black text-royal shadow-soft hover:bg-lavender"
+              aria-label="Expand navigation"
+              title="Expand navigation"
+            >
+              ☰
+            </button>
+          ) : (
+            <div className="rounded-[2rem] border border-purple-100 bg-white p-4 shadow-soft">
+              <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-royal">
                     STAR Camp
@@ -69,45 +79,43 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     Admin
                   </h1>
                 </div>
-              )}
 
-              <button
-                type="button"
-                onClick={() => setCollapsed((current) => !current)}
-                className="rounded-full border border-purple-200 px-3 py-2 text-sm font-semibold text-royal hover:bg-lavender"
-                aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-              >
-                {collapsed ? "☰" : "←"}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setCollapsed(true)}
+                  className="rounded-full border border-purple-200 px-3 py-2 text-sm font-semibold text-royal hover:bg-lavender"
+                  aria-label="Collapse navigation"
+                  title="Collapse navigation"
+                >
+                  ←
+                </button>
+              </div>
 
-            {loading ? (
-              !collapsed && (
+              {loading ? (
                 <p className="mt-6 text-sm text-muted">Loading...</p>
-              )
-            ) : (
-              <nav className="mt-6 space-y-2">
-                {navItems.map((item) => {
-                  const active = pathname === item.href;
+              ) : (
+                <nav className="mt-6 space-y-2">
+                  {navItems.map((item) => {
+                    const active = pathname === item.href;
 
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      title={item.label}
-                      className={`block rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                        active
-                          ? "bg-royal text-white"
-                          : "text-royal hover:bg-lavender"
-                      } ${collapsed ? "text-center" : ""}`}
-                    >
-                      {collapsed ? item.label.slice(0, 1) : item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-            )}
-          </div>
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`block rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                          active
+                            ? "bg-royal text-white"
+                            : "text-royal hover:bg-lavender"
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              )}
+            </div>
+          )}
         </aside>
 
         <section className="min-w-0 flex-1">{children}</section>
