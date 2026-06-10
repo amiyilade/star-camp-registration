@@ -8,6 +8,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [admin, setAdmin] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("adminNavCollapsed");
+    setCollapsed(saved === "true");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("adminNavCollapsed", String(collapsed));
+  }, [collapsed]);
 
   useEffect(() => {
     async function loadAdmin() {
@@ -32,10 +42,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     ...(isSuperAdmin
       ? [{ href: "/admin/dashboard", label: "Dashboard" }]
       : []),
-
     { href: "/admin/scan", label: "Scanner" },
     { href: "/admin/badge-queue", label: "Badge Queue" },
-
     ...(isSuperAdmin
       ? [{ href: "/admin/manage", label: "Manage Admins" }]
       : [])
@@ -44,18 +52,39 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-lavender">
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 lg:flex-row">
-        <aside className="lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:w-64">
-          <div className="rounded-[2rem] border border-purple-100 bg-white p-5 shadow-soft">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-royal">
-              STAR Camp
-            </p>
+        <aside
+          className={`lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] transition-all ${
+            collapsed ? "lg:w-20" : "lg:w-64"
+          }`}
+        >
+          <div className="rounded-[2rem] border border-purple-100 bg-white p-4 shadow-soft">
+            <div className="flex items-center justify-between gap-3">
+              {!collapsed && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-royal">
+                    STAR Camp
+                  </p>
 
-            <h1 className="mt-2 text-2xl font-black text-royalDark">
-              Admin
-            </h1>
+                  <h1 className="mt-1 text-2xl font-black text-royalDark">
+                    Admin
+                  </h1>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setCollapsed((current) => !current)}
+                className="rounded-full border border-purple-200 px-3 py-2 text-sm font-semibold text-royal hover:bg-lavender"
+                aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+              >
+                {collapsed ? "☰" : "←"}
+              </button>
+            </div>
 
             {loading ? (
-              <p className="mt-6 text-sm text-muted">Loading...</p>
+              !collapsed && (
+                <p className="mt-6 text-sm text-muted">Loading...</p>
+              )
             ) : (
               <nav className="mt-6 space-y-2">
                 {navItems.map((item) => {
@@ -65,13 +94,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     <Link
                       key={item.href}
                       href={item.href}
+                      title={item.label}
                       className={`block rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                         active
                           ? "bg-royal text-white"
                           : "text-royal hover:bg-lavender"
-                      }`}
+                      } ${collapsed ? "text-center" : ""}`}
                     >
-                      {item.label}
+                      {collapsed ? item.label.slice(0, 1) : item.label}
                     </Link>
                   );
                 })}
