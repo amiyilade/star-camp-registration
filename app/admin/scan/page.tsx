@@ -280,12 +280,6 @@ export default function AdminScanPage() {
     }
   }
 
-  async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = "/admin/login";
-  }
-
   if (loading) {
     return (
       <main className="min-h-screen bg-lavender px-6 py-16">
@@ -321,14 +315,6 @@ export default function AdminScanPage() {
 
             <p className="mt-2 text-muted">Logged in as {email}</p>
           </div>
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded-full border border-purple-200 px-5 py-3 text-sm font-semibold text-royal hover:bg-white"
-          >
-            Log out
-          </button>
         </div>
 
         <details className="mb-4 rounded-2xl border border-purple-100 bg-white p-4">

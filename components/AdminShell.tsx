@@ -3,12 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [admin, setAdmin] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/admin/login";
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem("adminNavCollapsed");
@@ -104,6 +111,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               {loading ? (
                 <p className="mt-6 text-sm text-muted">Loading...</p>
               ) : (
+                <>
                 <nav className="mt-6 space-y-2">
                   {navItems.map((item) => {
                     const active = pathname === item.href;
@@ -123,6 +131,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     );
                   })}
                 </nav>
+                <button
+                type="button"
+                onClick={handleLogout}
+                className="mt-6 w-full rounded-2xl border border-purple-200 px-4 py-3 text-sm font-semibold text-royal hover:bg-lavender"
+                >
+                  Log out
+                </button>
+                </>
               )}
             </div>
           )}
