@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,15 +18,51 @@ export default function AdminLoginPage() {
         data: { user }
       } = await supabase.auth.getUser();
 
-      if (user?.email) {
+      if (!user?.email) return;
+
+      const response = await fetch("/api/admin/me");
+
+      if (response.ok) {
         window.location.href = "/admin/scan";
+        return;
       }
+
+      await supabase.auth.signOut();
     }
 
     checkSession();
   }, []);
 
-  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
+  async function requestCode(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      setLoading(true);
+      setStatus(null);
+
+      const response = await fetch("/api/admin/auth/request-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setStatus(result.error ?? "Could not send login code.");
+        return;
+      }
+
+      setCodeSent(true);
+      setStatus("Login code sent. Check your email.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyCode(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     try {
@@ -33,11 +71,10 @@ export default function AdminLoginPage() {
 
       const supabase = createClient();
 
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/admin/scan`
-        }
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: code.trim(),
+        type: "email"
       });
 
       if (error) {
@@ -45,7 +82,15 @@ export default function AdminLoginPage() {
         return;
       }
 
-      setStatus("Check your email for the login link.");
+      const response = await fetch("/api/admin/me");
+
+      if (!response.ok) {
+        await supabase.auth.signOut();
+        setStatus("This email is not authorized for admin access.");
+        return;
+      }
+
+      window.location.href = "/admin/scan";
     } finally {
       setLoading(false);
     }
@@ -59,33 +104,61 @@ export default function AdminLoginPage() {
         </h1>
 
         <p className="mt-2 text-muted">
-          Enter your approved admin email to access the scanner.
+          Enter your approved admin email to receive a login code.
         </p>
 
-        <form onSubmit={handleLogin} className="mt-8 space-y-5">
-          <div>
-            <label className="text-sm font-semibold text-royalDark">
-              Email address
-            </label>
-
+        {!codeSent ? (
+          <form onSubmit={requestCode} className="mt-8 space-y-5">
             <input
               type="email"
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-2 w-full rounded-2xl border border-purple-100 px-4 py-3 outline-none focus:border-royal"
+              className="w-full rounded-2xl border border-purple-100 px-4 py-3 outline-none focus:border-royal"
               placeholder="admin@example.com"
             />
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white shadow-soft hover:bg-royalDark disabled:opacity-60"
-          >
-            {loading ? "Sending login link..." : "Send login link"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white shadow-soft hover:bg-royalDark disabled:opacity-60"
+            >
+              {loading ? "Sending..." : "Send login code"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={verifyCode} className="mt-8 space-y-5">
+            <input
+              type="text"
+              inputMode="numeric"
+              required
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              className="w-full rounded-2xl border border-purple-100 px-4 py-3 text-center text-2xl font-bold tracking-[0.4em] outline-none focus:border-royal"
+              placeholder="123456"
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white shadow-soft hover:bg-royalDark disabled:opacity-60"
+            >
+              {loading ? "Verifying..." : "Verify code"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCodeSent(false);
+                setCode("");
+                setStatus(null);
+              }}
+              className="w-full text-sm font-semibold text-royal"
+            >
+              Use a different email
+            </button>
+          </form>
+        )}
 
         {status && (
           <p className="mt-5 rounded-2xl bg-lavender p-4 text-sm text-royalDark">

@@ -23,11 +23,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     async function loadAdmin() {
       try {
         const response = await fetch("/api/admin/me");
-        const result = await response.json();
 
         if (response.ok) {
+          const result = await response.json();
           setAdmin(result.admin);
+          return;
         }
+
+        // User has a Supabase session but is not an admin.
+        const { createClient } = await import("@/lib/supabase/client");
+
+        const supabase = createClient();
+
+        await supabase.auth.signOut();
+
+        window.location.href = "/admin/login";
       } finally {
         setLoading(false);
       }

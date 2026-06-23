@@ -60,7 +60,17 @@ export default function AdminScanPage() {
         return;
       }
 
-      setEmail(user.email);
+      const adminResponse = await fetch("/api/admin/me");
+
+      if (!adminResponse.ok) {
+        await supabase.auth.signOut();
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      const adminResult = await adminResponse.json();
+
+      setEmail(adminResult.admin.email);
       setLoading(false);
     }
 
