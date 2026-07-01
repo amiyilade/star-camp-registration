@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 // @ts-ignore: CSS module declarations may be missing in this setup
 import "./globals.css";
+// @ts-ignore: CSS module declarations may be missing for this third-party package
+import "react-phone-input-2/lib/style.css";
 
 export const metadata: Metadata = {
   title: "STAR Camp Registration",

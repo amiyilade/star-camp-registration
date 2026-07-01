@@ -1,4 +1,5 @@
 export const DEPARTMENTS = [
+  "Not a Volunteer",
   "Admin",
   "Bible Study",
   "Choir",
@@ -7,7 +8,6 @@ export const DEPARTMENTS = [
   "Logistics",
   "Medical",
   "Media",
-  "Not a Volunteer",
   "Other",
   "Prayer",
   "Protocol",

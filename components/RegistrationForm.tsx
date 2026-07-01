@@ -4,10 +4,11 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ArrowRight, CheckCircle2, Copy, ShieldCheck } from "lucide-react";
-import { ABUJA_AREAS, COUNTRY_CODES, DEPARTMENTS, NIGERIAN_STATES, OWERRI_AREAS } from "@/lib/registration-data";
+import { ArrowLeft, ArrowRight, CheckCircle2, Copy } from "lucide-react";
+import { ABUJA_AREAS, DEPARTMENTS, NIGERIAN_STATES, OWERRI_AREAS } from "@/lib/registration-data";
 import { EVENTS } from "@/lib/events";
 import { RegistrationFormData, registrationSchema } from "@/lib/registration-schema";
+import ReactPhoneInput from "react-phone-input-2";
 
 const defaultPhone = { countryCode: "+234", number: "" };
 
@@ -73,23 +74,71 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className="w-full rounded-2xl border border-purple-100 bg-white px-4 py-3 outline-none transition focus:border-royal focus:ring-4 focus:ring-purple-100" />;
 }
 
-function PhoneInput({ register, prefix, error }: { register: any; prefix: string; error?: any }) {
+function PhoneInput({
+  control,
+  prefix,
+  error
+}: {
+  control: any;
+  prefix: string;
+  error?: any;
+}) {
   return (
     <div>
-      <div className="grid grid-cols-[130px_1fr] gap-2">
-        <Select {...register(`${prefix}.countryCode`)}>
-          {COUNTRY_CODES.map((code) => (
-            <option key={`${code.label}-${code.value}`} value={code.value}>{code.value} {code.label}</option>
-          ))}
-        </Select>
-        <TextInput {...register(`${prefix}.number`)} placeholder="8012345678" inputMode="tel" />
-      </div>
+      <Controller
+        control={control}
+        name={prefix}
+        render={({ field }) => {
+          const countryCode = field.value?.countryCode ?? "+234";
+          const number = field.value?.number ?? "";
+
+          const phoneValue = `${countryCode.replace("+", "")}${number}`;
+
+          return (
+            <ReactPhoneInput
+              country="ng"
+              preferredCountries={["ng", "gh", "ke", "za", "gb", "us", "ca"]}
+              enableSearch
+              countryCodeEditable={false}
+              value={phoneValue}
+              onChange={(value, country: any) => {
+                const dialCode = country?.dialCode ?? "234";
+                const nationalNumber = value.startsWith(dialCode)
+                  ? value.slice(dialCode.length)
+                  : value;
+
+                field.onChange({
+                  countryCode: `+${dialCode}`,
+                  number: nationalNumber
+                });
+              }}
+              inputStyle={{
+                width: "100%",
+                height: "48px",
+                borderRadius: "16px",
+                border: "1px solid #f3e8ff",
+                fontSize: "16px"
+              }}
+              buttonStyle={{
+                borderTopLeftRadius: "16px",
+                borderBottomLeftRadius: "16px",
+                border: "1px solid #f3e8ff",
+                background: "white"
+              }}
+              dropdownStyle={{
+                borderRadius: "16px"
+              }}
+            />
+          );
+        }}
+      />
+
       <FieldError message={error?.countryCode?.message || error?.number?.message} />
     </div>
   );
 }
 
-function ContactFields({ title, register, prefix, errors, includeEmail = false }: { title: string; register: any; prefix: string; errors?: any; includeEmail?: boolean }) {
+function ContactFields({ title, register, control, prefix, errors, includeEmail = false }: { title: string; register: any; control: any; prefix: string; errors?: any; includeEmail?: boolean }) {
   return (
     <div className="rounded-3xl bg-lavender/60 p-5">
       <h4 className="mb-4 font-semibold text-royalDark">{title}</h4>
@@ -106,7 +155,7 @@ function ContactFields({ title, register, prefix, errors, includeEmail = false }
         </div>
         <div className={includeEmail ? "" : "md:col-span-2"}>
           <Label>Phone number</Label>
-          <PhoneInput register={register} prefix={`${prefix}.phone`} error={errors?.phone} />
+          <PhoneInput control={control} prefix={`${prefix}.phone`} error={errors?.phone} />
         </div>
         {includeEmail && (
           <div>
@@ -446,7 +495,7 @@ export default function RegistrationForm() {
                   </div>
                   <div>
                     <Label>Phone number</Label>
-                    <PhoneInput register={register} prefix="buyer.phone" error={errors.buyer?.phone} />
+                    <PhoneInput control={control} prefix="buyer.phone" error={errors.buyer?.phone} />
                   </div>
                 </div>
               </section>
@@ -485,7 +534,7 @@ export default function RegistrationForm() {
                           </div>
                           <div>
                             <Label>Phone number</Label>
-                            <PhoneInput register={register} prefix={`attendees.${index}.phone`} error={errors.attendees?.[index]?.phone} />
+                            <PhoneInput control={control} prefix={`attendees.${index}.phone`} error={errors.attendees?.[index]?.phone} />
                           </div>
                           <div>
                             <Label>Date of birth</Label>
@@ -564,7 +613,7 @@ export default function RegistrationForm() {
                           {age === null && <p className="rounded-2xl bg-lavender p-4 text-sm text-muted">Enter date of birth to show guardian or emergency contact fields.</p>}
                           {age !== null && isUnder20 && (
                             <>
-                              <ContactFields title="Guardian details required because attendee is under 20" register={register} prefix={`attendees.${index}.guardian`} errors={errors.attendees?.[index]?.guardian} includeEmail />
+                              <ContactFields title="Guardian details required because attendee is under 20" register={register} control={control} prefix={`attendees.${index}.guardian`} errors={errors.attendees?.[index]?.guardian} includeEmail />
                               <div>
                                 <Label>Check-in/check-out authority</Label>
                                 <Select {...register(`attendees.${index}.pickupAuthority`)}>
@@ -573,10 +622,10 @@ export default function RegistrationForm() {
                                 </Select>
                                 <FieldError message={errors.attendees?.[index]?.pickupAuthority?.message} />
                               </div>
-                              {attendees?.[index]?.pickupAuthority === "other" && <ContactFields title="Authorized pickup person" register={register} prefix={`attendees.${index}.authorizedPickup`} errors={errors.attendees?.[index]?.authorizedPickup} />}
+                              {attendees?.[index]?.pickupAuthority === "other" && <ContactFields title="Authorized pickup person" register={register} control={control} prefix={`attendees.${index}.authorizedPickup`} errors={errors.attendees?.[index]?.authorizedPickup} />}
                             </>
                           )}
-                          {age !== null && !isUnder20 && <ContactFields title="Emergency contact required because attendee is 20 or older" register={register} prefix={`attendees.${index}.emergencyContact`} errors={errors.attendees?.[index]?.emergencyContact} />}
+                          {age !== null && !isUnder20 && <ContactFields title="Emergency contact required because attendee is 20 or older" register={register} control={control} prefix={`attendees.${index}.emergencyContact`} errors={errors.attendees?.[index]?.emergencyContact} />}
                         </div>
                       </div>
                     );
@@ -620,7 +669,7 @@ export default function RegistrationForm() {
             {step === 4 && (
               <section>
                 <h2 className="text-3xl font-semibold text-royalDark">Review registration</h2>
-                <p className="mt-2 text-muted">Check the summary before continuing. Payment integration comes next.</p>
+                <p className="mt-2 text-muted">Check the summary before continuing. Payment comes next.</p>
                 <div className="mt-8 rounded-[2rem] bg-lavender p-6">
                   <p className="font-semibold text-royalDark">{selectedEvent.name}</p>
                   <p className="mt-2 text-muted">Buyer: {watch("buyer.fullName")} · {watch("buyer.email")}</p>
@@ -634,10 +683,6 @@ export default function RegistrationForm() {
                       <p className="mt-1 text-sm text-muted">{attendee.department} · {attendee.residenceArea}</p>
                     </div>
                   ))}
-                </div>
-                <div className="mt-6 flex items-start gap-3 rounded-3xl bg-lavender p-5 text-sm text-muted">
-                  <ShieldCheck className="mt-1 shrink-0 text-royal" size={22} />
-                  <p>This frontend is ready for database and Paystack integration. On submit, it validates and displays the data locally.</p>
                 </div>
               </section>
             )}
@@ -655,7 +700,7 @@ export default function RegistrationForm() {
                    {isSubmitting
                     ? "Saving..."
                     : reviewReady
-                      ? "Submit Registration Draft"
+                      ? "Take me to payment"
                       : "Review before submitting"}
                 </button>
               )}
