@@ -11,6 +11,9 @@ export default function AdminAttendeesPage() {
   const [attendees, setAttendees] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sendingTicketId, setSendingTicketId] = useState<string | null>(null);
+  const [sentTicketId, setSentTicketId] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   async function runSearch() {
     if (search.trim().length < 2) {
@@ -50,22 +53,33 @@ export default function AdminAttendeesPage() {
   }
 
   async function resendTicket(ticketId: string) {
-    const response = await fetch("/api/admin/tickets/resend", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ ticketId })
-    });
+    try {
+      setSendingTicketId(ticketId);
+      setSentTicketId(null);
 
-    const result = await response.json();
+      const response = await fetch("/api/admin/tickets/resend", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ ticketId })
+      });
 
-    if (!response.ok) {
-      alert(result.error ?? "Could not resend ticket.");
-      return;
+      const result = await response.json();
+
+      if (!response.ok) {
+        setResendError(result.error ?? "Could not resend ticket.");
+        return;
+      }
+
+      setSentTicketId(ticketId);
+
+      setTimeout(() => {
+        setSentTicketId(null);
+      }, 3000);
+    } finally {
+      setSendingTicketId(null);
     }
-
-    alert("Ticket resent successfully.");
   }
 
   useEffect(() => {
@@ -93,6 +107,11 @@ export default function AdminAttendeesPage() {
             code.
           </p>
         </div>
+        {resendError && (
+        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {resendError}
+        </div>
+      )}
 
         <section className="mt-8 rounded-[2rem] border border-purple-100 bg-white p-6 shadow-soft">
           <div className="grid gap-4 md:grid-cols-[1fr_240px]">
@@ -250,10 +269,18 @@ export default function AdminAttendeesPage() {
                   {ticket?.id && (
                     <button
                       type="button"
+                      disabled={
+                        sendingTicketId === ticket.id ||
+                        sentTicketId === ticket.id
+                      }
                       onClick={() => resendTicket(ticket.id)}
-                      className="rounded-full bg-royal px-5 py-3 text-sm font-semibold text-white hover:bg-royalDark"
+                      className="rounded-full bg-royal px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
                     >
-                      Resend Ticket
+                      {sendingTicketId === ticket.id
+                        ? "Sending..."
+                        : sentTicketId === ticket.id
+                          ? "✓ Sent"
+                          : "Resend Ticket"}
                     </button>
                   )}
 
