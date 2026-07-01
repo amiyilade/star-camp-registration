@@ -49,6 +49,25 @@ export default function AdminAttendeesPage() {
     }
   }
 
+  async function resendTicket(ticketId: string) {
+    const response = await fetch("/api/admin/tickets/resend", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ ticketId })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.error ?? "Could not resend ticket.");
+      return;
+    }
+
+    alert("Ticket resent successfully.");
+  }
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       runSearch();
@@ -228,13 +247,15 @@ export default function AdminAttendeesPage() {
                     </Link>
                   )}
 
-                  <button
-                    type="button"
-                    disabled
-                    className="rounded-full border border-purple-200 px-5 py-3 text-sm font-semibold text-muted opacity-60"
-                  >
-                    Resend Ticket Coming Soon
-                  </button>
+                  {ticket?.id && (
+                    <button
+                      type="button"
+                      onClick={() => resendTicket(ticket.id)}
+                      className="rounded-full bg-royal px-5 py-3 text-sm font-semibold text-white hover:bg-royalDark"
+                    >
+                      Resend Ticket
+                    </button>
+                  )}
 
                   <button
                     type="button"
