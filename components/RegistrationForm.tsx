@@ -191,6 +191,44 @@ function ContactFields({ title, register, control, prefix, errors, includeEmail 
   );
 }
 
+function formatEventDateRange(dateStart?: string, dateEnd?: string) {
+  if (!dateStart || !dateEnd) {
+    return "Date to be announced";
+  }
+
+  const [startYear, startMonth, startDay] = dateStart.split("-").map(Number);
+  const [endYear, endMonth, endDay] = dateEnd.split("-").map(Number);
+
+  const start = new Date(startYear, startMonth - 1, startDay);
+  const end = new Date(endYear, endMonth - 1, endDay);
+
+  const sameMonth =
+    start.getMonth() === end.getMonth() &&
+    start.getFullYear() === end.getFullYear();
+
+  if (sameMonth) {
+    const monthYear = new Intl.DateTimeFormat("en-GB", {
+      month: "long",
+      year: "numeric",
+    }).format(start);
+
+    return `${startDay}–${endDay} ${monthYear}`;
+  }
+
+  const startFormatted = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+  }).format(start);
+
+  const endFormatted = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(end);
+
+  return `${startFormatted} – ${endFormatted}`;
+}
+
 export default function RegistrationForm() {
   const [step, setStep] = useState(0);
   const [submittedData, setSubmittedData] = useState<RegistrationFormData | null>(null);
@@ -544,7 +582,7 @@ export default function RegistrationForm() {
                       className={`rounded-[2rem] border p-6 text-left transition ${eventSlug === event.slug ? "border-royal bg-lavender shadow-soft" : "border-purple-100 bg-white hover:border-royal"}`}
                     >
                       <p className="text-xl font-semibold text-royalDark">{event.name}</p>
-                      <p className="mt-2 text-muted">{event.dateStart ? "5–9 August 2026" : "Date to be announced"}</p>
+                      <p className="mt-2 text-muted">{formatEventDateRange(event.dateStart, event.dateEnd)}</p>
                       <p className="mt-4 text-2xl font-semibold text-royal">{money(event.price)}</p>
                     </button>
                   ))}
