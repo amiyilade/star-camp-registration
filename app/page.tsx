@@ -82,7 +82,7 @@ export default function HomePage() {
         <Image src="/tkh-logo.png" alt="The King's Hub logo" width={170} height={170} priority />
         <p className="mt-5 text-sm uppercase tracking-[0.35em] text-gold">The King&apos;s Hub</p>
         <h1 className="mt-4 max-w-3xl text-5xl font-semibold tracking-tight text-royalDark md:text-7xl">
-          TEST STAR Camp Registration
+          STAR Camp Registration
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-8 text-muted">
           Hello! Here, you can register for Global STAR Camp 2026 or Eastern Region STAR Camp 2026. Ensure you select the right camp, provide complete and accurate details, and pay. For inquiries or complaints, please contact us at hello@thekingshub.world. 
