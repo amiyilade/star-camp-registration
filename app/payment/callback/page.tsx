@@ -6,11 +6,15 @@ import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 type VerifyResponse =
   | {
       success: true;
+      status: "success";
       publicReference: string;
     }
   | {
       success: false;
+      status: "failed" | "abandoned" | "pending" | "error";
       error: string;
+      publicReference?: string;
+      retryUrl?: string;
     };
 
 export default function PaymentCallbackPage() {
@@ -27,6 +31,7 @@ export default function PaymentCallbackPage() {
         if (!reference) {
           setResult({
             success: false,
+            status: "error",
             error: "Missing payment reference."
           });
 
@@ -39,12 +44,17 @@ export default function PaymentCallbackPage() {
 
         const data = await response.json();
 
+        if (data.success) {
+          localStorage.removeItem("pendingStarCampPayment");
+        }
+
         setResult(data);
       } catch (error) {
         console.error(error);
 
         setResult({
           success: false,
+          status: "error",
           error: "Could not verify payment."
         });
       } finally {
@@ -113,7 +123,7 @@ export default function PaymentCallbackPage() {
           </>
         )}
 
-        {!loading && !result?.success && (
+        {!loading && result && !result.success && (
           <>
             <XCircle
               className="mx-auto text-red-600"
@@ -121,11 +131,71 @@ export default function PaymentCallbackPage() {
             />
 
             <h1 className="mt-6 text-3xl font-semibold text-royalDark">
-              Payment verification failed
+              {result.status === "failed"
+                ? "Payment was declined"
+                : result.status === "abandoned"
+                  ? "Payment was not completed"
+                  : "Payment could not be confirmed"}
             </h1>
 
             <p className="mt-3 text-muted">
-              {result?.error}
+              {result.error}
+            </p>
+
+            {result.publicReference && (
+              <p className="mt-6 text-sm font-semibold text-royal">
+                Reference: {result.publicReference}
+              </p>
+            )}
+
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              {result.publicReference && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const response = await fetch("/api/payments/retry", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json"
+                      },
+                      body: JSON.stringify({
+                        publicReference: result.publicReference
+                      })
+                    });
+
+                    const retryResult = await response.json();
+
+                    if (!response.ok) {
+                      alert(retryResult.error ?? "Could not restart payment.");
+                      return;
+                    }
+
+                    window.location.href = retryResult.paymentUrl;
+                  }}
+                  className="inline-flex items-center justify-center rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-royalDark"
+                >
+                  Try payment again
+                </button>
+              )}
+
+              <a
+                href="/register"
+                className="inline-flex items-center justify-center rounded-full border border-purple-200 px-6 py-3 text-sm font-semibold text-royal transition hover:bg-lavender"
+              >
+                Start a new registration
+              </a>
+
+              <a
+                href="/"
+                className="inline-flex items-center justify-center rounded-full border border-purple-200 px-6 py-3 text-sm font-semibold text-royal transition hover:bg-lavender"
+              >
+                Return home
+              </a>
+            </div>
+
+            <p className="mt-6 text-xs text-muted">
+              If money was deducted from your account, please do not register again immediately.
+              Contact STAR Camp support with your reference.
             </p>
           </>
         )}

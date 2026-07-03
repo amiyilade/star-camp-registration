@@ -3,24 +3,42 @@ import { z } from "zod";
 function calculateAge(dateOfBirth?: string) {
   if (!dateOfBirth) return null;
 
-  const today = new Date();
-  const birthDate = new Date(dateOfBirth);
+  const dob = new Date(dateOfBirth);
 
-  if (Number.isNaN(birthDate.getTime())) return null;
+  if (Number.isNaN(dob.getTime())) return null;
 
-  let age = today.getFullYear() - birthDate.getFullYear();
+  const cutoff = new Date("2026-08-31");
 
-  const monthDiff = today.getMonth() - birthDate.getMonth();
+  let age = cutoff.getFullYear() - dob.getFullYear();
 
-  if (
-    monthDiff < 0 ||
-    (monthDiff === 0 && today.getDate() < birthDate.getDate())
-  ) {
-    age--;
+  const birthdayPassed =
+    cutoff.getMonth() > dob.getMonth() ||
+    (cutoff.getMonth() === dob.getMonth() &&
+      cutoff.getDate() >= dob.getDate());
+
+  if (!birthdayPassed) {
+    age -= 1;
   }
 
   return age;
 }
+
+function normalizePhone(phone?: { countryCode?: string; number?: string }) {
+  const countryCode = phone?.countryCode?.replace(/\D/g, "") ?? "";
+  let number = phone?.number?.replace(/\D/g, "") ?? "";
+
+  // Normalize local Nigerian-style leading zero: 0803... → 803...
+  if (number.startsWith("0")) {
+    number = number.slice(1);
+  }
+
+  if (!countryCode || !number) return "";
+
+  return `${countryCode}${number}`;
+}
+
+const DUPLICATE_PHONE_MESSAGE =
+  "This number matches the attendee’s own phone number. Please provide a different contact number.";
 
 const phoneSchema = z.object({
   countryCode: z.string().min(1, "Select a country code"),
@@ -78,9 +96,34 @@ export const attendeeSchema = z
 
   
   .superRefine((attendee, ctx) => {
+    const attendeePhone = normalizePhone(attendee.phone);
+
+    if (attendeePhone) {
+      (["guardian", "emergencyContact", "authorizedPickup"] as const).forEach((key) => {
+        const contactPhone = normalizePhone(attendee[key]?.phone);
+
+        if (contactPhone && contactPhone === attendeePhone) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: DUPLICATE_PHONE_MESSAGE,
+            path: [key, "phone", "number"]
+          });
+        }
+      });
+    }
+
     const age = calculateAge(attendee.dateOfBirth);
 
     if (age === null) return;
+
+    if (age !== null && (age < 13 || age > 30)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["dateOfBirth"],
+        message:
+          "You have to be a teenager or young adult by STAR Camp to attend."
+      });
+    }
 
     if (age < 20) {
       const guardianCheck = requiredContactSchema.safeParse(attendee.guardian);
@@ -130,7 +173,8 @@ export const registrationSchema = z.object({
     email: z.string().email("Enter a valid email"),
     phone: phoneSchema
   }),
-  attendees: z.array(attendeeSchema).min(1).max(10)
+  attendees: z.array(attendeeSchema).min(1).max(10),
+  duplicateOverrideAttendeeIndexes: z.array(z.number()).optional()
 });
 
 export type RegistrationFormData = z.infer<typeof registrationSchema>;

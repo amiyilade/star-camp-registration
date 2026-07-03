@@ -22,6 +22,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const duplicateOverrideIndexes = parsed.data.duplicateOverrideAttendeeIndexes ?? [];
+
     const normalised = normaliseRegistrationForDatabase(parsed.data);
 
     const { data: event, error: eventError } = await supabaseAdmin
@@ -40,6 +42,50 @@ export async function POST(request: Request) {
     const unitPrice = event.price_ngn;
     const totalAmount = unitPrice * normalised.order.ticket_quantity;
     const publicReference = generatePublicReference(normalised.order.event_slug);
+
+    function normalizeName(value: string) {
+      return value.trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    const duplicateIndexes: number[] = [];
+
+    for (let index = 0; index < parsed.data.attendees.length; index++) {
+      const attendee = parsed.data.attendees[index];
+
+      const { data: matches, error } = await supabaseAdmin
+        .from("attendees")
+        .select("id")
+        .eq("event_id", event.id)
+        .ilike("first_name", normalizeName(attendee.firstName))
+        .ilike("last_name", normalizeName(attendee.lastName))
+        .eq("date_of_birth", attendee.dateOfBirth)
+        .limit(1);
+
+      if (error) {
+        return NextResponse.json(
+          { error: "Could not check for duplicate registrations." },
+          { status: 500 }
+        );
+      }
+
+      if (matches && matches.length > 0) {
+        duplicateIndexes.push(index);
+      }
+    }
+
+    const unacknowledgedDuplicates = duplicateIndexes.filter(
+      (index) => !duplicateOverrideIndexes.includes(index)
+    );
+
+    if (unacknowledgedDuplicates.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Possible duplicate attendee detected.",
+          duplicateIndexes: unacknowledgedDuplicates
+        },
+        { status: 409 }
+      );
+    }
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from("registration_orders")

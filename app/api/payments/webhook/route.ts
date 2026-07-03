@@ -67,9 +67,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (order.status === "paid") {
+      const ticketResult = await createTicketsForPaidOrder(order.id);
+      await sendTicketEmails(order.id);
+
       return NextResponse.json({
         received: true,
-        message: "Order already paid."
+        message: "Order already paid. Fulfillment checked.",
+        ticketResult
       });
     }
 

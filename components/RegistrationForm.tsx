@@ -10,6 +10,7 @@ import { EVENTS } from "@/lib/events";
 import { RegistrationFormData, registrationSchema } from "@/lib/registration-schema";
 import ReactPhoneInput from "react-phone-input-2";
 
+
 const defaultPhone = { countryCode: "+234", number: "" };
 
 const emptyContact = () => ({ name: "", phone: { ...defaultPhone }, relationship: "", email: "" });
@@ -40,12 +41,29 @@ const emptyAttendee = () => ({
 
 function calculateAge(dateOfBirth?: string) {
   if (!dateOfBirth) return null;
+
   const dob = new Date(dateOfBirth);
-  if (Number.isNaN(dob.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age -= 1;
+
+  if (Number.isNaN(dob.getTime())) {
+    return null;
+  }
+
+  // Age as of August 31, 2026
+  const cutoff = new Date("2026-08-31");
+
+  let age = cutoff.getFullYear() - dob.getFullYear();
+
+  const birthdayPassed =
+    cutoff.getMonth() > dob.getMonth() ||
+    (
+      cutoff.getMonth() === dob.getMonth() &&
+      cutoff.getDate() >= dob.getDate()
+    );
+
+  if (!birthdayPassed) {
+    age -= 1;
+  }
+
   return age;
 }
 
@@ -77,11 +95,13 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 function PhoneInput({
   control,
   prefix,
-  error
+  error,
+  onAfterChange
 }: {
   control: any;
   prefix: string;
   error?: any;
+  onAfterChange?: () => void;
 }) {
   return (
     <div>
@@ -111,6 +131,8 @@ function PhoneInput({
                   countryCode: `+${dialCode}`,
                   number: nationalNumber
                 });
+
+                onAfterChange?.();
               }}
               inputStyle={{
                 width: "100%",
@@ -138,7 +160,7 @@ function PhoneInput({
   );
 }
 
-function ContactFields({ title, register, control, prefix, errors, includeEmail = false }: { title: string; register: any; control: any; prefix: string; errors?: any; includeEmail?: boolean }) {
+function ContactFields({ title, register, control, prefix, errors, includeEmail = false, onPhoneChange }: { title: string; register: any; control: any; prefix: string; errors?: any; includeEmail?: boolean; onPhoneChange?: () => void }) {
   return (
     <div className="rounded-3xl bg-lavender/60 p-5">
       <h4 className="mb-4 font-semibold text-royalDark">{title}</h4>
@@ -155,7 +177,7 @@ function ContactFields({ title, register, control, prefix, errors, includeEmail 
         </div>
         <div className={includeEmail ? "" : "md:col-span-2"}>
           <Label>Phone number</Label>
-          <PhoneInput control={control} prefix={`${prefix}.phone`} error={errors?.phone} />
+          <PhoneInput control={control} prefix={`${prefix}.phone`} error={errors?.phone} onAfterChange={onPhoneChange} />
         </div>
         {includeEmail && (
           <div>
@@ -195,6 +217,9 @@ export default function RegistrationForm() {
   const residenceOptions = selectedEvent.location === "Abuja" ? ABUJA_AREAS : OWERRI_AREAS;
   const attendees = watch("attendees");
   const total = selectedEvent.price * Number(ticketQuantity || 1);
+  const [duplicateIndexes, setDuplicateIndexes] = useState<number[]>([]);
+  const [acknowledgedDuplicateIndexes, setAcknowledgedDuplicateIndexes] = useState<number[]>([]);
+  const hasUnacknowledgedDuplicates = duplicateIndexes.some((index) => !acknowledgedDuplicateIndexes.includes(index));
 
   useEffect(() => {
     if (step === 4) {
@@ -210,6 +235,25 @@ export default function RegistrationForm() {
     setReviewReady(false);
   }, [step]);
 
+  function recheckAttendeePhones(index: number) {
+    const attendee = form.getValues(`attendees.${index}`);
+    const age = calculateAge(attendee?.dateOfBirth);
+    const isUnder20 = age !== null && age < 20;
+
+    const paths = [`attendees.${index}.phone.number`];
+
+    if (isUnder20) {
+      paths.push(`attendees.${index}.guardian.phone.number`);
+      if (attendee?.pickupAuthority === "other") {
+        paths.push(`attendees.${index}.authorizedPickup.phone.number`);
+      }
+    } else if (age !== null) {
+      paths.push(`attendees.${index}.emergencyContact.phone.number`);
+    }
+
+    trigger(paths as any);
+  }
+
   function syncTicketQuantity(quantity: number) {
     const safeQuantity = Math.min(Math.max(quantity, 1), 10);
     const current = form.getValues("attendees") || [];
@@ -217,6 +261,27 @@ export default function RegistrationForm() {
     setValue("ticketQuantity", safeQuantity);
     replace(next);
   }
+
+    async function checkDuplicates() {
+      const values = form.getValues();
+
+      const response = await fetch("/api/registrations/check-duplicates", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(values)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return [];
+      }
+
+      setDuplicateIndexes(result.duplicateIndexes ?? []);
+      return result.duplicateIndexes ?? [];
+    }
 
   async function nextStep() {
     let fieldsToValidate: string[] = [];
@@ -324,6 +389,11 @@ export default function RegistrationForm() {
     console.log("Next step validation ok:", ok);
 
     if (ok) {
+      if (step === 3) {
+        setAcknowledgedDuplicateIndexes([]);
+        await checkDuplicates();
+      }
+
       setStep((current) => Math.min(current + 1, 4));
     } else {
       console.log("Validation failed:", form.formState.errors);
@@ -342,6 +412,8 @@ export default function RegistrationForm() {
     setValue(`attendees.${index}.pickupAuthority`, previous.pickupAuthority);
     setValue(`attendees.${index}.authorizedPickup`, previous.authorizedPickup);
   }
+
+
 
   const steps = ["Camp", "Buyer", "Attendees", "Consent", "Review"];
 
@@ -416,7 +488,10 @@ export default function RegistrationForm() {
                     headers: {
                       "Content-Type": "application/json"
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({
+                      ...data,
+                      duplicateOverrideAttendeeIndexes: acknowledgedDuplicateIndexes
+                    })
                   });
 
                   const result = await response.json();
@@ -430,6 +505,15 @@ export default function RegistrationForm() {
                   console.log("Saved registration:", result);
 
                   if (result.paymentUrl) {
+                    localStorage.setItem(
+                      "pendingStarCampPayment",
+                      JSON.stringify({
+                        publicReference: result.publicReference,
+                        paymentUrl: result.paymentUrl,
+                        savedAt: new Date().toISOString()
+                      })
+                    );
+
                     window.location.href = result.paymentUrl;
                     return;
                   }
@@ -446,7 +530,16 @@ export default function RegistrationForm() {
               (errors) => {
                 console.log("Submit validation errors:", errors);
                 console.log("Submit validation errors JSON:", JSON.stringify(errors, null, 2));
-                alert("Some required information is missing. Check the browser console for details.");
+
+                if (errors.attendees) {
+                  setStep(2);
+                } else if (errors.buyer) {
+                  setStep(1);
+                } else if (errors.eventSlug || errors.ticketQuantity) {
+                  setStep(0);
+                }
+
+                alert("Some required information is missing. Check the highlighted fields.");
               }
             )}
             className="rounded-[2rem] border border-purple-100 bg-white p-5 shadow-soft md:p-8">
@@ -534,7 +627,7 @@ export default function RegistrationForm() {
                           </div>
                           <div>
                             <Label>Phone number</Label>
-                            <PhoneInput control={control} prefix={`attendees.${index}.phone`} error={errors.attendees?.[index]?.phone} />
+                            <PhoneInput control={control} prefix={`attendees.${index}.phone`} error={errors.attendees?.[index]?.phone} onAfterChange={() => recheckAttendeePhones(index)} />
                           </div>
                           <div>
                             <Label>Date of birth</Label>
@@ -581,7 +674,7 @@ export default function RegistrationForm() {
                             </Select>
                           </div>
                           <div>
-                            <Label>Interested in merch?</Label>
+                            <Label>Interested in purchasing merch?</Label>
                             <Select {...register(`attendees.${index}.interestedInMerch`)}>
                               <option>Yes</option>
                               <option>No</option>
@@ -613,7 +706,7 @@ export default function RegistrationForm() {
                           {age === null && <p className="rounded-2xl bg-lavender p-4 text-sm text-muted">Enter date of birth to show guardian or emergency contact fields.</p>}
                           {age !== null && isUnder20 && (
                             <>
-                              <ContactFields title="Guardian details required because attendee is under 20" register={register} control={control} prefix={`attendees.${index}.guardian`} errors={errors.attendees?.[index]?.guardian} includeEmail />
+                              <ContactFields title="Guardian details required because attendee is under 20" register={register} control={control} prefix={`attendees.${index}.guardian`} errors={errors.attendees?.[index]?.guardian} includeEmail onPhoneChange={() => recheckAttendeePhones(index)} />
                               <div>
                                 <Label>Check-in/check-out authority</Label>
                                 <Select {...register(`attendees.${index}.pickupAuthority`)}>
@@ -622,10 +715,10 @@ export default function RegistrationForm() {
                                 </Select>
                                 <FieldError message={errors.attendees?.[index]?.pickupAuthority?.message} />
                               </div>
-                              {attendees?.[index]?.pickupAuthority === "other" && <ContactFields title="Authorized pickup person" register={register} control={control} prefix={`attendees.${index}.authorizedPickup`} errors={errors.attendees?.[index]?.authorizedPickup} />}
+                              {attendees?.[index]?.pickupAuthority === "other" && <ContactFields title="Authorized pickup person" register={register} control={control} prefix={`attendees.${index}.authorizedPickup`} errors={errors.attendees?.[index]?.authorizedPickup} onPhoneChange={() => recheckAttendeePhones(index)} />}
                             </>
                           )}
-                          {age !== null && !isUnder20 && <ContactFields title="Emergency contact required because attendee is 20 or older" register={register} control={control} prefix={`attendees.${index}.emergencyContact`} errors={errors.attendees?.[index]?.emergencyContact} />}
+                          {age !== null && !isUnder20 && <ContactFields title="Emergency contact required because attendee is 20 or older" register={register} control={control} prefix={`attendees.${index}.emergencyContact`} errors={errors.attendees?.[index]?.emergencyContact} onPhoneChange={() => recheckAttendeePhones(index)} />}
                         </div>
                       </div>
                     );
@@ -681,27 +774,71 @@ export default function RegistrationForm() {
                       <p className="font-semibold text-royalDark">{index + 1}. {attendee.firstName} {attendee.lastName}</p>
                       <p className="mt-1 text-sm text-muted">{attendee.email || "Ticket will be sent to buyer email"}</p>
                       <p className="mt-1 text-sm text-muted">{attendee.department} · {attendee.residenceArea}</p>
+
+                      {duplicateIndexes.includes(index) && (
+                        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left">
+                          <p className="font-semibold text-amber-800">
+                            Possible duplicate registration
+                          </p>
+
+                          <p className="mt-2 text-sm text-amber-800">
+                            This attendee may already be registered for this event. Please check the
+                            details carefully. If this is a different person, tick the box below to
+                            continue.
+                          </p>
+
+                          <label className="mt-3 flex items-start gap-3 text-sm text-amber-900">
+                            <input
+                              type="checkbox"
+                              checked={acknowledgedDuplicateIndexes.includes(index)}
+                              onChange={(event) => {
+                                setAcknowledgedDuplicateIndexes((current) =>
+                                  event.target.checked
+                                    ? [...current, index]
+                                    : current.filter((item) => item !== index)
+                                );
+                              }}
+                            />
+                            I understand and want to continue with this attendee.
+                          </label>
+                        </div>
+                      )}
                     </div>
                   ))}
+                  
                 </div>
               </section>
             )}
 
             <div className="mt-10 flex items-center justify-between border-t border-purple-100 pt-6">
-              <button type="button" onClick={() => setStep((current) => Math.max(current - 1, 0))} disabled={step === 0} className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-royal disabled:opacity-30">
+              <button type="button" 
+              onClick={() => {
+                if (step === 4) {
+                  setDuplicateIndexes([]);
+                  setAcknowledgedDuplicateIndexes([]);
+                }
+                setStep((current) => Math.max(current - 1, 0));
+              }} 
+              disabled={step === 0} className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-royal disabled:opacity-30">
                 <ArrowLeft size={16} /> Back
               </button>
               {step < 4 ? (
-                <button type="button" onClick={nextStep} className="inline-flex items-center gap-2 rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white shadow-soft hover:bg-royalDark">
+                <button type="button" onClick={nextStep} className="inline-flex items-center gap-2 rounded-full bg-royal px-6 py-3 text-sm font-semibold 
+                text-white shadow-soft disabled:bg-gray-300 
+                disabled:text-gray-500 disabled:shadow-none disabled:cursor-not-allowed hover:bg-royalDark">
                   Continue <ArrowRight size={16} />
                 </button>
               ) : (
-                <button type="submit" className="rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white shadow-soft hover:bg-royalDark" disabled={isSubmitting || !reviewReady}>
+                <button type="submit" className="rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white shadow-soft disabled:bg-gray-300 
+                disabled:text-gray-500 disabled:shadow-none disabled:cursor-not-allowed hover:bg-royalDark" 
+                disabled={isSubmitting || !reviewReady || hasUnacknowledgedDuplicates}>
                    {isSubmitting
                     ? "Saving..."
-                    : reviewReady
-                      ? "Take me to payment"
-                      : "Review before submitting"}
+                    : hasUnacknowledgedDuplicates
+                      ? "Confirm duplicate warnings to continue"
+                      : reviewReady
+                        ? "Take me to payment"
+                        : "Review before submitting"}
                 </button>
               )}
             </div>

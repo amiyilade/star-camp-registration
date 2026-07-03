@@ -77,6 +77,26 @@ export async function sendTicketEmails(orderId: string) {
       continue;
     }
 
+    // Claim this ticket email send attempt.
+    // This prevents duplicate sends if webhook + verify run at the same time.
+    const { data: claimedTicket, error: claimError } = await supabaseAdmin
+      .from("tickets")
+      .update({
+        email_send_started_at: new Date().toISOString()
+      })
+      .eq("id", ticket.id)
+      .is("email_sent_at", null)
+      .is("email_send_started_at", null)
+      .select("id")
+      .single();
+
+    if (claimError || !claimedTicket) {
+      console.warn(
+        `Ticket ${ticket.id} email already claimed or sent. Skipping.`
+      );
+      continue;
+    }
+
     const recipientEmail =
       attendee.email?.trim().toLowerCase() ||
       order.buyer_email;
@@ -180,7 +200,8 @@ export async function sendTicketEmails(orderId: string) {
       await supabaseAdmin
         .from("tickets")
         .update({
-          email_sent_at: new Date().toISOString()
+          email_sent_at: new Date().toISOString(),
+          email_send_started_at: null
         })
         .eq("id", ticket.id);
 
@@ -354,7 +375,7 @@ export async function resendSingleTicketEmail(ticketId: string) {
   await supabaseAdmin
     .from("tickets")
     .update({
-      email_sent_at: new Date().toISOString()
+      last_resent_at: new Date().toISOString()
     })
     .eq("id", ticket.id);
 
