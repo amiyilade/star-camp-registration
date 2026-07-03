@@ -120,8 +120,6 @@ export async function POST(request: NextRequest) {
     const ticketResult = await createTicketsForPaidOrder(order.id);
     await sendTicketEmails(order.id);
 
-    console.log("Ticket generation result:", ticketResult);
-
     return NextResponse.json({
       received: true,
       publicReference: order.public_reference

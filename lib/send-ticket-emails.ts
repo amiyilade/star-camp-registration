@@ -195,8 +195,6 @@ export async function sendTicketEmails(orderId: string) {
         ]
     });
 
-    console.log("Ticket email result:", emailResult);
-
     if (emailResult.error) {
         console.error("Resend email error:", emailResult.error);
         continue;

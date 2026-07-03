@@ -385,9 +385,6 @@ export default function RegistrationForm() {
       shouldFocus: true
     });
 
-    console.log("Current step:", step);
-    console.log("Next step validation ok:", ok);
-
     if (ok) {
       if (step === 3) {
         setAcknowledgedDuplicateIndexes([]);
@@ -395,9 +392,7 @@ export default function RegistrationForm() {
       }
 
       setStep((current) => Math.min(current + 1, 4));
-    } else {
-      console.log("Validation failed:", form.formState.errors);
-    }
+    } 
   }
 
   function copyFromPrevious(index: number) {
@@ -481,8 +476,6 @@ export default function RegistrationForm() {
                 try {
                   setIsSubmitting(true);
 
-                  console.log("Registration data", data);
-
                   const response = await fetch("/api/registrations", {
                     method: "POST",
                     headers: {
@@ -501,8 +494,6 @@ export default function RegistrationForm() {
                     alert(result.error ?? "Could not save registration draft.");
                     return;
                   }
-
-                  console.log("Saved registration:", result);
 
                   if (result.paymentUrl) {
                     localStorage.setItem(
@@ -528,9 +519,6 @@ export default function RegistrationForm() {
                 }
               },
               (errors) => {
-                console.log("Submit validation errors:", errors);
-                console.log("Submit validation errors JSON:", JSON.stringify(errors, null, 2));
-
                 if (errors.attendees) {
                   setStep(2);
                 } else if (errors.buyer) {
