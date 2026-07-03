@@ -3,10 +3,10 @@ export const EVENTS = [
     slug: "abuja-2026",
     name: "STAR Camp Abuja 2026",
     location: "Abuja",
-    price: 100,
+    price: 15000,
     currency: "NGN",
-    dateStart: null,
-    dateEnd: null
+    dateStart: "2026-08-25",
+    dateEnd: "2026-08-30"
   },
   {
     slug: "owerri-2026",
