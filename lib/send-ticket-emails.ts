@@ -5,6 +5,17 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+function resolveRecipient(email: string) {
+  if (
+    process.env.EMAIL_MODE === "test" &&
+    process.env.TEST_EMAIL
+  ) {
+    return process.env.TEST_EMAIL;
+  }
+
+  return email;
+}
+
 export async function sendTicketEmails(orderId: string) {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -120,7 +131,7 @@ export async function sendTicketEmails(orderId: string) {
 
     const emailResult = await resend.emails.send({
       from: fromEmail,
-      to: recipientEmail,
+      to: resolveRecipient(recipientEmail),
       subject: `${event?.name ?? "STAR Camp"} Ticket Confirmation`,
       html: `
         <div style="font-family: Inter, Arial, sans-serif; line-height: 1.6; color: #1f1f1f;">
@@ -297,7 +308,7 @@ export async function resendSingleTicketEmail(ticketId: string) {
 
   const emailResult = await resend.emails.send({
     from: fromEmail,
-    to: recipientEmail,
+    to: resolveRecipient(recipientEmail),
     subject: `${event?.name ?? "STAR Camp"} Ticket Confirmation`,
     html: `
       <div style="font-family: Inter, Arial, sans-serif; line-height: 1.6; color: #1f1f1f;">
