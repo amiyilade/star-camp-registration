@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { createTicketsForPaidOrder } from "@/lib/create-tickets-for-order";
+import { sendTicketEmails } from "@/lib/send-ticket-emails";
 
 export async function GET(request: NextRequest) {
   try {
@@ -103,10 +105,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (order.status === "paid") {
+      const ticketResult = await createTicketsForPaidOrder(order.id);
+      await sendTicketEmails(order.id);
+
       return NextResponse.json({
         success: true,
         status: "success",
-        publicReference: order.public_reference
+        publicReference: order.public_reference,
+        ticketResult
       });
     }
 
@@ -132,10 +138,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const ticketResult = await createTicketsForPaidOrder(order.id);
+    await sendTicketEmails(order.id);
+
     return NextResponse.json({
       success: true,
       status: "success",
-      publicReference: order.public_reference
+      publicReference: order.public_reference,
+      ticketResult
     });
   } catch (error) {
     console.error("Verify route error:", error);

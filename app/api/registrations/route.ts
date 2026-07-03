@@ -143,8 +143,6 @@ export async function POST(request: Request) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-    console.log("APP URL USED FOR PAYSTACK:", appUrl);
-
     const paystack = await initializePaystackTransaction({
     email: normalised.order.buyer_email,
     amountKobo: totalAmount * 100,
