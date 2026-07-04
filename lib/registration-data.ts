@@ -9,6 +9,7 @@ export const DEPARTMENTS = [
   "Medical",
   "Media",
   "Prayer",
+  "Programs & Awards",
   "Protocol",
   "Sanitation",
   "Security",
