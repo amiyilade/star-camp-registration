@@ -6,6 +6,28 @@ import { generatePublicReference } from "@/lib/generate-public-reference";
 import { initializePaystackTransaction } from "@/lib/paystack";
 import { generatePaystackReference } from "@/lib/generate-paystack-reference";
 
+function normalizeName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+async function deleteRegistrationOrder(orderId: string) {
+  const { error } = await supabaseAdmin
+    .from("registration_orders")
+    .delete()
+    .eq("id", orderId);
+
+  if (error) {
+    console.error("Failed to clean up registration order:", {
+      orderId,
+      error
+    });
+
+    return false;
+  }
+
+  return true;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -22,7 +44,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const duplicateOverrideIndexes = parsed.data.duplicateOverrideAttendeeIndexes ?? [];
+    const duplicateOverrideIndexes =
+      parsed.data.duplicateOverrideAttendeeIndexes ?? [];
 
     const normalised = normaliseRegistrationForDatabase(parsed.data);
 
@@ -41,27 +64,35 @@ export async function POST(request: Request) {
 
     const unitPrice = event.price_ngn;
     const totalAmount = unitPrice * normalised.order.ticket_quantity;
-    const publicReference = generatePublicReference(normalised.order.event_slug);
-
-    function normalizeName(value: string) {
-      return value.trim().toLowerCase().replace(/\s+/g, " ");
-    }
+    const publicReference = generatePublicReference(
+      normalised.order.event_slug
+    );
 
     const duplicateIndexes: number[] = [];
 
-    for (let index = 0; index < parsed.data.attendees.length; index++) {
+    for (
+      let index = 0;
+      index < parsed.data.attendees.length;
+      index++
+    ) {
       const attendee = parsed.data.attendees[index];
 
       const { data: matches, error } = await supabaseAdmin
         .from("attendees")
-        .select("id")
+        .select(`
+          id,
+          registration_orders!inner(status)
+        `)
         .eq("event_id", event.id)
         .ilike("first_name", normalizeName(attendee.firstName))
         .ilike("last_name", normalizeName(attendee.lastName))
         .eq("date_of_birth", attendee.dateOfBirth)
+        .in("registration_orders.status", ["pending_payment", "paid"])
         .limit(1);
 
       if (error) {
+        console.error("Duplicate check error:", error);
+
         return NextResponse.json(
           { error: "Could not check for duplicate registrations." },
           { status: 500 }
@@ -93,7 +124,8 @@ export async function POST(request: Request) {
         event_id: event.id,
         buyer_full_name: normalised.order.buyer_full_name,
         buyer_email: normalised.order.buyer_email,
-        buyer_phone_country_code: normalised.order.buyer_phone_country_code,
+        buyer_phone_country_code:
+          normalised.order.buyer_phone_country_code,
         buyer_phone_number: normalised.order.buyer_phone_number,
         ticket_quantity: normalised.order.ticket_quantity,
         unit_price_ngn: unitPrice,
@@ -127,10 +159,7 @@ export async function POST(request: Request) {
     if (attendeesError) {
       console.error("Attendee insert error:", attendeesError);
 
-      await supabaseAdmin
-        .from("registration_orders")
-        .delete()
-        .eq("id", order.id);
+      await deleteRegistrationOrder(order.id);
 
       return NextResponse.json(
         { error: "Could not save attendee details." },
@@ -138,52 +167,115 @@ export async function POST(request: Request) {
       );
     }
 
+    const paystackReference = generatePaystackReference(
+      order.public_reference
+    );
 
-    const paystackReference = generatePaystackReference(order.public_reference);
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    let paystack: {
+      authorization_url: string;
+      access_code: string;
+      reference: string;
+    };
 
-    const paystack = await initializePaystackTransaction({
-    email: normalised.order.buyer_email,
-    amountKobo: totalAmount * 100,
-    reference: paystackReference,
-    callbackUrl: `${appUrl}/payment/callback`,
-    metadata: {
-        order_id: order.id,
-        public_reference: order.public_reference,
-        event_slug: normalised.order.event_slug,
-        ticket_quantity: normalised.order.ticket_quantity
+    try {
+      paystack = await initializePaystackTransaction({
+        email: normalised.order.buyer_email,
+        amountKobo: totalAmount * 100,
+        reference: paystackReference,
+        callbackUrl: `${appUrl}/payment/callback`,
+        metadata: {
+          order_id: order.id,
+          public_reference: order.public_reference,
+          event_slug: normalised.order.event_slug,
+          ticket_quantity: normalised.order.ticket_quantity
+        }
+      });
+    } catch (error) {
+      console.error("Paystack initialization failed:", {
+        orderId: order.id,
+        error
+      });
+
+      const cleanedUp = await deleteRegistrationOrder(order.id);
+
+      return NextResponse.json(
+        {
+          error: cleanedUp
+            ? "Payment could not be initialized. No registration was created. Please try again."
+            : "Payment could not be initialized. Please contact support before trying again."
+        },
+        { status: 502 }
+      );
     }
-    });
 
     const { error: paymentUpdateError } = await supabaseAdmin
-    .from("registration_orders")
-    .update({
+      .from("registration_orders")
+      .update({
         status: "pending_payment",
         paystack_reference: paystackReference,
         paystack_authorization_url: paystack.authorization_url
-    })
-    .eq("id", order.id);
+      })
+      .eq("id", order.id);
 
     if (paymentUpdateError) {
-    console.error("Payment update error:", paymentUpdateError);
+      console.error("Payment update error:", {
+        orderId: order.id,
+        paystackReference,
+        error: paymentUpdateError
+      });
 
-    return NextResponse.json(
-        { error: "Registration was saved, but payment could not be initialized." },
+      // Paystack created a transaction, but the application could not persist
+      // the normal pending-payment state. Retain an auditable cancelled record
+      // where possible.
+      const { error: cancellationError } = await supabaseAdmin
+        .from("registration_orders")
+        .update({
+          status: "cancelled",
+          paystack_reference: paystackReference,
+          paystack_authorization_url: paystack.authorization_url
+        })
+        .eq("id", order.id);
+
+      if (cancellationError) {
+        console.error("Failed to mark broken payment order as cancelled:", {
+          orderId: order.id,
+          paystackReference,
+          error: cancellationError
+        });
+
+        const cleanedUp = await deleteRegistrationOrder(order.id);
+
+        return NextResponse.json(
+          {
+            error: cleanedUp
+              ? "Payment setup could not be completed. No registration was created. Please try again."
+              : "Payment setup could not be completed. Please contact support before trying again."
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "Payment setup could not be completed. The registration was cancelled and no payment link was issued. Please try again."
+        },
         { status: 500 }
-    );
+      );
     }
 
     return NextResponse.json(
-    {
-        message: "Registration draft saved. Redirecting to payment.",
+      {
+        message: "Registration saved. Redirecting to payment.",
         orderId: order.id,
         publicReference: order.public_reference,
         paymentUrl: paystack.authorization_url
-    },
-    { status: 201 }
+      },
+      { status: 201 }
     );
-
   } catch (error) {
     console.error("Registration API error:", error);
 
