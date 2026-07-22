@@ -25,6 +25,10 @@ export async function GET(request: NextRequest) {
       checked_out_at,
       attendee_id,
       event_id,
+      order_id,
+      registration_orders!inner (
+        status
+      ),
       attendees (
         first_name,
         last_name,
@@ -54,7 +58,7 @@ export async function GET(request: NextRequest) {
         id,
         code,
         name
-    )
+      )
     `);
 
   const { data: ticket, error } = token
@@ -84,6 +88,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { error: access.error },
       { status: access.status }
+    );
+  }
+
+  const order = Array.isArray(ticket.registration_orders)
+    ? ticket.registration_orders[0]
+    : ticket.registration_orders;
+
+  if (order?.status !== "paid" || ticket.status !== "valid") {
+    await supabaseAdmin.from("checkin_logs").insert({
+      ticket_id: ticket.id,
+      attendee_id: ticket.attendee_id,
+      event_id: ticket.event_id,
+      admin_user_id: access.admin.id,
+      admin_email: access.admin.email,
+      action: "duplicate_attempt",
+      notes: `Ticket verification rejected. Order status: ${
+        order?.status ?? "unknown"
+      }; ticket status: ${ticket.status}.`
+    });
+
+    return NextResponse.json(
+      {
+        error:
+          order?.status !== "paid"
+            ? `Ticket is not valid for entry. Payment status: ${
+                order?.status ?? "unknown"
+              }.`
+            : `Ticket is not valid for entry. Ticket status: ${ticket.status}.`
+      },
+      { status: 400 }
     );
   }
 

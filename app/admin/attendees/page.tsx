@@ -158,6 +158,13 @@ export default function AdminAttendeesPage() {
               ? attendee.tickets[0]
               : attendee.tickets;
 
+            const order = Array.isArray(attendee.registration_orders)
+              ? attendee.registration_orders[0]
+              : attendee.registration_orders;
+
+            const isPaid = order?.status === "paid";
+            const isTicketValid = Boolean(ticket) && isPaid && ticket.status === "valid";
+
             const team = Array.isArray(ticket?.teams)
               ? ticket.teams[0]
               : ticket?.teams;
@@ -233,6 +240,21 @@ export default function AdminAttendeesPage() {
                     label="Ticket Email"
                     value={ticket ? "Generated" : "No ticket"}
                   />
+                  <Info
+                    label="Payment"
+                    value={order?.status ?? "Unknown"}
+                  />
+
+                  <Info
+                    label="Ticket Validity"
+                    value={
+                      !ticket
+                        ? "No ticket"
+                        : isTicketValid
+                          ? "Valid"
+                          : "Invalid"
+                    }
+                  />
                 </div>
 
                 <div className="mt-6 rounded-2xl bg-lavender p-4">
@@ -256,7 +278,7 @@ export default function AdminAttendeesPage() {
                 </div>
 
                 <div className="mt-6 flex flex-wrap gap-3">
-                  {ticket?.qr_token && (
+                  {ticket?.qr_token && isTicketValid && (
                     <Link
                       href={`/tickets/${ticket.qr_token}`}
                       target="_blank"
@@ -266,7 +288,7 @@ export default function AdminAttendeesPage() {
                     </Link>
                   )}
 
-                  {ticket?.id && (
+                  {ticket?.id && isTicketValid && (
                     <button
                       type="button"
                       disabled={
@@ -282,6 +304,13 @@ export default function AdminAttendeesPage() {
                           ? "✓ Sent"
                           : "Resend Ticket"}
                     </button>
+                  )}
+
+                  {ticket?.id && !isTicketValid && (
+                    <p className="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                      Ticket actions are disabled because this registration is not paid or the
+                      ticket has been invalidated.
+                    </p>
                   )}
 
                   <button

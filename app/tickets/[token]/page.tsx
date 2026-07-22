@@ -59,10 +59,45 @@ export default async function TicketPage({ params }: TicketPageProps) {
     ? ticket.events[0]
     : ticket.events;
 
+  const order = Array.isArray(ticket.registration_orders)
+    ? ticket.registration_orders[0]
+    : ticket.registration_orders;
+
+  const isValidTicket =
+    order?.status === "paid" && ticket.status === "valid";
+
   const eventDate =
     event?.date_start && event?.date_end
       ? `${event.date_start} to ${event.date_end}`
       : "Date to be announced";
+
+  if (!isValidTicket) {
+    return (
+      <main className="min-h-screen bg-white px-6 py-16">
+        <div className="mx-auto max-w-2xl rounded-[2rem] border border-red-200 bg-white p-10 text-center shadow-soft">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-red-700">
+            Invalid Ticket
+          </p>
+
+          <h1 className="mt-4 text-3xl font-semibold text-red-800">
+            This ticket is not valid for entry
+          </h1>
+
+          <p className="mt-3 text-muted">
+            The associated registration is unpaid, cancelled, expired, or the
+            ticket has been invalidated.
+          </p>
+
+          <Link
+            href="/"
+            className="mt-8 inline-flex rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white"
+          >
+            Return home
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-lavender px-6 py-16">

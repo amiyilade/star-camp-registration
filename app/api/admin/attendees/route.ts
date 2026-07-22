@@ -118,6 +118,10 @@ async function searchAttendees(search: string, allowedEventIds: string[]) {
   const baseSelect = `
     id,
     event_id,
+    order_id,
+    registration_orders!inner (
+      status
+    ),
     first_name,
     last_name,
     email,

@@ -19,7 +19,18 @@ export async function POST(request: NextRequest) {
 
     const { data: ticket, error: ticketError } = await supabaseAdmin
       .from("tickets")
-      .select("id, attendee_id, event_id, status, checked_in_at, checked_out_at")
+      .select(`
+        id,
+        attendee_id,
+        event_id,
+        order_id,
+        status,
+        checked_in_at,
+        checked_out_at,
+        registration_orders!inner (
+          status
+        )
+      `)
       .eq("id", ticketId)
       .single();
 
@@ -46,6 +57,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: access.error },
         { status: access.status }
+      );
+    }
+
+    const order = Array.isArray(ticket.registration_orders)
+      ? ticket.registration_orders[0]
+      : ticket.registration_orders;
+
+    if (order?.status !== "paid") {
+      await supabaseAdmin.from("checkin_logs").insert({
+        ticket_id: ticket.id,
+        attendee_id: ticket.attendee_id,
+        event_id: ticket.event_id,
+        admin_user_id: access.admin.id,
+        admin_email: access.admin.email,
+        action: "duplicate_attempt",
+        notes: `Check-in rejected because order status is ${order?.status ?? "unknown"}.`
+      });
+
+      return NextResponse.json(
+        {
+          error: `Ticket is not valid for entry. Payment status: ${
+            order?.status ?? "unknown"
+          }.`
+        },
+        { status: 400 }
       );
     }
 

@@ -15,6 +15,9 @@ export async function GET(
         status,
         checked_in_at,
         checked_out_at,
+        registration_orders!inner (
+          status
+        ),
         attendees (
           first_name,
           last_name,

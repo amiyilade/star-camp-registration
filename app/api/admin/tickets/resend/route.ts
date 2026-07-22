@@ -23,6 +23,10 @@ export async function POST(request: NextRequest) {
       qr_token,
       attendee_id,
       event_id,
+      order_id,
+      registration_orders!inner (
+        status
+      ),
       attendees (
         first_name,
         last_name,
@@ -53,6 +57,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const order = Array.isArray(ticket.registration_orders)
+    ? ticket.registration_orders[0]
+    : ticket.registration_orders;
+
+  if (order?.status !== "paid") {
+    return NextResponse.json(
+      {
+        error: `Ticket cannot be resent because the registration is ${order?.status ?? "not paid"}.`
+      },
+      { status: 409 }
+    );
+  }
+
   const attendee = Array.isArray(ticket.attendees)
     ? ticket.attendees[0]
     : ticket.attendees;
@@ -69,7 +86,7 @@ export async function POST(request: NextRequest) {
   await supabaseAdmin
     .from("tickets")
     .update({
-      email_sent_at: new Date().toISOString()
+      last_resent_at: new Date().toISOString()
     })
     .eq("id", ticket.id);
 
