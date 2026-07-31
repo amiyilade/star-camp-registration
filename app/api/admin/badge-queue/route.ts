@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/auth/get-admin-user";
+import { logAdminActivity } from "@/lib/admin/log-admin-activity";
 import { requireAdminForEvent } from "@/lib/auth/require-admin-for-event";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
@@ -169,6 +170,26 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  await logAdminActivity({
+    adminUserId: access.admin.id,
+    adminEmail: access.admin.email,
+    eventId: ticket.event_id,
+    ticketId: ticket.id,
+    attendeeId: ticket.attendee_id,
+    action:
+      action === "mark_printed"
+        ? "badge_marked_printed"
+        : "badge_marked_issued",
+    notes:
+      action === "mark_printed"
+        ? "Badge marked as printed."
+        : "Badge marked as issued.",
+    metadata: {
+      previousAction: action,
+      resultingBadgeStatus: updatedTicket.badge_status
+    }
+  });
 
   return NextResponse.json({
     ticket: updatedTicket

@@ -63,7 +63,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     { href: "/admin/badge-queue", label: "Badge Queue" },
     { href: "/admin/attendees", label: "Attendees" },
     ...(isSuperAdmin
-      ? [{ href: "/admin/manage", label: "Manage Admins" }]
+      ? [
+          { href: "/admin/logs", label: "Logs" },
+          { href: "/admin/manage", label: "Manage Admins" }
+        ]
       : [])
   ];
 

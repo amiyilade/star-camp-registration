@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/auth/get-admin-user";
+import { logAdminActivity } from "@/lib/admin/log-admin-activity";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -133,6 +134,12 @@ export async function POST(request: Request) {
     );
     }
 
+  const { data: previousAdmin } = await supabaseAdmin
+    .from("admin_users")
+    .select("id, email, full_name, is_super_admin, is_active")
+    .eq("email", normalizedEmail)
+    .maybeSingle();  
+
   const { data: adminUser, error: adminError } = await supabaseAdmin
     .from("admin_users")
     .upsert(
@@ -202,6 +209,34 @@ export async function POST(request: Request) {
       }
     }
   }
+
+  const adminAction = previousAdmin
+    ? "admin_updated"
+    : "admin_created";
+
+  await logAdminActivity({
+    adminUserId: admin.id,
+    adminEmail: admin.email,
+    action: adminAction,
+    notes: previousAdmin
+      ? `Admin account updated for ${normalizedEmail}.`
+      : `Admin account created for ${normalizedEmail}.`,
+    metadata: {
+      targetAdminUserId: adminUser.id,
+      targetEmail: normalizedEmail,
+      fullName: fullName.trim(),
+      isSuperAdmin,
+      role: isSuperAdmin ? null : role,
+      eventSlugs: isSuperAdmin ? [] : eventSlugs,
+      previous: previousAdmin
+        ? {
+            fullName: previousAdmin.full_name,
+            isSuperAdmin: previousAdmin.is_super_admin,
+            isActive: previousAdmin.is_active
+          }
+        : null
+    }
+  });
 
   return NextResponse.json({
     message: "Admin saved successfully."

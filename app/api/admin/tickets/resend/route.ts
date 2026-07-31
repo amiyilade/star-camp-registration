@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { logAdminActivity } from "@/lib/admin/log-admin-activity";
 import { requireAdminForEvent } from "@/lib/auth/require-admin-for-event";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { resendSingleTicketEmail } from "@/lib/send-ticket-emails";
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   const access = await requireAdminForEvent(ticket.event_id);
 
-  if (!access.allowed) {
+  if (!access.allowed || !access.admin) {
     return NextResponse.json(
       { error: access.error },
       { status: access.status }
@@ -81,14 +82,63 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  await resendSingleTicketEmail(ticketId);
+  try {
+    await resendSingleTicketEmail(ticketId);
+  } catch (error) {
+    await logAdminActivity({
+      adminUserId: access.admin?.id ?? null,
+      adminEmail: access.admin?.email ?? "unknown",
+      eventId: ticket.event_id,
+      ticketId: ticket.id,
+      attendeeId: ticket.attendee_id,
+      action: "ticket_resend_failed",
+      outcome: "failure",
+      notes:
+        error instanceof Error
+          ? error.message
+          : "Unknown ticket resend failure"
+    });
 
-  await supabaseAdmin
+    console.error("Ticket resend failed:", {
+      ticketId: ticket.id,
+      error
+    });
+
+    return NextResponse.json(
+      { error: "Could not resend ticket." },
+      { status: 500 }
+    );
+  }
+
+  const resentAt = new Date().toISOString();
+
+  const { error: updateError } = await supabaseAdmin
     .from("tickets")
     .update({
-      last_resent_at: new Date().toISOString()
+      last_resent_at: resentAt
     })
     .eq("id", ticket.id);
+
+  if (updateError) {
+    console.error("Could not update ticket resend timestamp:", {
+      ticketId: ticket.id,
+      error: updateError
+    });
+  }
+
+  await logAdminActivity({
+    adminUserId: access.admin?.id ?? null,
+    adminEmail: access.admin?.email ?? "unknown",
+    eventId: ticket.event_id,
+    ticketId: ticket.id,
+    attendeeId: ticket.attendee_id,
+    action: "ticket_resent",
+    notes: "Ticket email resent by an admin.",
+    metadata: {
+      resentAt,
+      ticketCode: ticket.ticket_code
+    }
+  });
 
   return NextResponse.json({
     message: "Ticket resent successfully."
