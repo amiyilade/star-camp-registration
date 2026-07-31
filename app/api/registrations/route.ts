@@ -3,8 +3,32 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { registrationSchema } from "@/lib/registration-schema";
 import { normaliseRegistrationForDatabase } from "@/lib/normalise-registration";
 import { generatePublicReference } from "@/lib/generate-public-reference";
-import { initializePaystackTransaction } from "@/lib/paystack";
+import {
+  initializePaystackTransaction,
+  PaystackInitializationError
+} from "@/lib/paystack";
 import { generatePaystackReference } from "@/lib/generate-paystack-reference";
+
+function getSafeErrorDetails(error: unknown) {
+  if (error instanceof PaystackInitializationError) {
+    return {
+      name: error.name,
+      message: error.message,
+      details: error.details
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message
+    };
+  }
+
+  return {
+    message: "Unknown error"
+  };
+}
 
 function normalizeName(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -29,6 +53,8 @@ async function deleteRegistrationOrder(orderId: string) {
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+
   try {
     const body = await request.json();
 
@@ -194,22 +220,54 @@ export async function POST(request: Request) {
         }
       });
     } catch (error) {
-      console.error("Paystack initialization failed:", {
-        orderId: order.id,
-        error
-      });
+        const safeErrorDetails = getSafeErrorDetails(error);
 
-      const cleanedUp = await deleteRegistrationOrder(order.id);
+        console.error("Paystack initialization failed:", {
+          requestId,
+          orderId: order.id,
+          publicReference: order.public_reference,
+          eventSlug: normalised.order.event_slug,
+          paystackReference,
+          error: safeErrorDetails
+        });
 
-      return NextResponse.json(
-        {
-          error: cleanedUp
-            ? "Payment could not be initialized. No registration was created. Please try again."
-            : "Payment could not be initialized. Please contact support before trying again."
-        },
-        { status: 502 }
-      );
-    }
+        const { error: failureLogError } = await supabaseAdmin
+          .from("payment_failure_logs")
+          .insert({
+            request_id: requestId,
+            order_id: order.id,
+            public_reference: order.public_reference,
+            buyer_email: normalised.order.buyer_email,
+            event_id: event.id,
+            stage: "paystack_initialization",
+            paystack_reference: paystackReference,
+            error_message:
+              error instanceof Error
+                ? error.message
+                : "Unknown Paystack initialization error",
+            error_details: safeErrorDetails
+          });
+
+        if (failureLogError) {
+          console.error("Could not persist payment failure log:", {
+            requestId,
+            orderId: order.id,
+            error: failureLogError
+          });
+        }
+
+        const cleanedUp = await deleteRegistrationOrder(order.id);
+
+        return NextResponse.json(
+          {
+            error: cleanedUp
+              ? "Payment could not be initialized. No registration was created. Please try again."
+              : "Payment could not be initialized. Please contact support before trying again.",
+            supportReference: requestId
+          },
+          { status: 502 }
+        );
+      }
 
     const { error: paymentUpdateError } = await supabaseAdmin
       .from("registration_orders")
@@ -226,6 +284,32 @@ export async function POST(request: Request) {
         paystackReference,
         error: paymentUpdateError
       });
+
+      const { error: failureLogError } = await supabaseAdmin
+        .from("payment_failure_logs")
+        .insert({
+          request_id: requestId,
+          order_id: order.id,
+          public_reference: order.public_reference,
+          buyer_email: normalised.order.buyer_email,
+          event_id: event.id,
+          stage: "payment_state_persistence",
+          paystack_reference: paystackReference,
+          error_message: paymentUpdateError.message,
+          error_details: {
+            code: paymentUpdateError.code,
+            details: paymentUpdateError.details,
+            hint: paymentUpdateError.hint
+          }
+        });
+
+      if (failureLogError) {
+        console.error("Could not persist payment failure log:", {
+          requestId,
+          orderId: order.id,
+          error: failureLogError
+        });
+      }
 
       // Paystack created a transaction, but the application could not persist
       // the normal pending-payment state. Retain an auditable cancelled record
@@ -261,7 +345,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Payment setup could not be completed. The registration was cancelled and no payment link was issued. Please try again."
+            "Payment setup could not be completed. The registration was cancelled and no payment link was issued. Please try again.",
+            supportReference: requestId
         },
         { status: 500 }
       );
