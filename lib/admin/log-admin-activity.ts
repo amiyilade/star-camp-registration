@@ -8,7 +8,11 @@ type AdminActivityAction =
   | "admin_created"
   | "admin_updated"
   | "admin_role_updated"
-  | "admin_access_denied";
+  | "admin_access_denied"
+  | "event_admin_added"
+  | "event_admin_role_changed"
+  | "event_admin_removed"
+  | "super_admin_status_changed";
 
 type AdminActivityOutcome =
   | "success"

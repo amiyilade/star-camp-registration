@@ -11,29 +11,45 @@ export async function getAdminUser() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name) {
-          return cookieStore.get(name)?.value;
+        getAll() {
+          return cookieStore.getAll();
         },
-        set() {},
-        remove() {}
+
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            /*
+             * Cookie writes may fail when called from a Server Component.
+             * Session refresh should normally be handled by your middleware.
+             */
+          }
+        }
       }
     }
   );
 
   const {
-    data: { user }
+    data: { user },
+    error: userError
   } = await supabase.auth.getUser();
 
-  if (!user?.email) {
+  if (userError || !user?.email) {
     return null;
   }
 
-  const { data: adminUser } = await supabaseAdmin
+  const { data: adminUser, error: adminError } = await supabaseAdmin
     .from("admin_users")
     .select("*")
-    .eq("email", user.email)
+    .eq("email", user.email.trim().toLowerCase())
     .eq("is_active", true)
-    .single();
+    .maybeSingle();
+
+  if (adminError || !adminUser) {
+    return null;
+  }
 
   return adminUser;
 }

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [admin, setAdmin] = useState<any | null>(null);
+  const [adminContext, setAdminContext] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -33,7 +33,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
         if (response.ok) {
           const result = await response.json();
-          setAdmin(result.admin);
+          setAdminContext(result);
           return;
         }
 
@@ -53,20 +53,35 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     loadAdmin();
   }, []);
 
-  const isSuperAdmin = admin?.is_super_admin;
+  const isSuperAdmin =
+    adminContext?.permissions?.isSuperAdmin ?? false;
+
+  const canViewDashboard =
+    adminContext?.permissions?.canViewDashboard ?? false;
+
+  const canViewLogs =
+    adminContext?.permissions?.canViewLogs ?? false;
+
+  const canManageEventAdmins =
+    adminContext?.permissions?.canManageEventAdmins ?? false;
 
   const navItems = [
-    ...(isSuperAdmin
+    ...(canViewDashboard
       ? [{ href: "/admin/dashboard", label: "Dashboard" }]
       : []),
+
     { href: "/admin/scan", label: "Scanner" },
+
     { href: "/admin/badge-queue", label: "Badge Queue" },
+
     { href: "/admin/attendees", label: "Attendees" },
-    ...(isSuperAdmin
-      ? [
-          { href: "/admin/logs", label: "Logs" },
-          { href: "/admin/manage", label: "Manage Admins" }
-        ]
+
+    ...(canViewLogs
+      ? [{ href: "/admin/logs", label: "Logs" }]
+      : []),
+
+    ...(canManageEventAdmins
+      ? [{ href: "/admin/manage", label: "Manage Admins" }]
       : [])
   ];
 

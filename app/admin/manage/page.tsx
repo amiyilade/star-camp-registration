@@ -1,63 +1,41 @@
 import { redirect } from "next/navigation";
 
-import { getAdminUser } from "@/lib/auth/get-admin-user";
-import { supabaseAdmin } from "@/lib/supabase/server";
-import { AdminCreateForm } from "@/components/AdminCreateForm";
-import { AdminEditCard } from "@/components/AdminEditCard";
 import { AdminShell } from "@/components/AdminShell";
+import { AdminManagementClient } from "@/components/AdminManagementClient";
+import { getManagedEvents } from "@/lib/auth/get-managed-events";
 
 export default async function AdminManagePage() {
-  const admin = await getAdminUser();
+  const { admin, events } = await getManagedEvents();
 
   if (!admin) {
     redirect("/admin/login");
   }
 
-  if (!admin.is_super_admin) {
+  if (!admin.is_super_admin && events.length === 0) {
     redirect("/admin/scan");
-  }
-
-  const { data: admins, error } = await supabaseAdmin
-    .from("admin_users")
-    .select(`
-      *,
-      admin_event_roles (
-        role,
-        is_active,
-        events (
-          id,
-          name,
-          slug
-        )
-      )
-    `)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error(error.message);
   }
 
   return (
     <AdminShell>
       <div>
-        <div className="mb-10">
-          <h1 className="text-4xl font-semibold text-royalDark">
+        <div className="mb-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-royal">
+            STAR Camp Admin
+          </p>
+
+          <h1 className="mt-2 text-4xl font-semibold text-royalDark">
             Admin Management
           </h1>
 
           <p className="mt-2 text-muted">
-            Manage STAR Camp event access.
+            Manage scanner and manager access by event.
           </p>
         </div>
 
-        <div className="overflow-hidden rounded-[2rem] border border-purple-100 bg-white shadow-soft">
-        <AdminCreateForm />
-        <div className="space-y-4">
-            {admins?.map((item: any) => (
-                <AdminEditCard key={item.id} admin={item} />
-            ))}
-        </div>
-        </div>
+        <AdminManagementClient
+          events={events as any}
+          viewerIsSuperAdmin={admin.is_super_admin}
+        />
       </div>
     </AdminShell>
   );
