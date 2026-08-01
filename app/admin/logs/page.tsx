@@ -30,6 +30,8 @@ export default function AdminLogsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [viewerIsSuperAdmin, setViewerIsSuperAdmin] = useState(false);
+
   async function loadLogs() {
     try {
       setLoading(true);
@@ -60,6 +62,10 @@ export default function AdminLogsPage() {
 
       setLogs(result.logs ?? []);
       setEvents(result.events ?? []);
+
+      setViewerIsSuperAdmin(
+        result.viewer?.isSuperAdmin ?? false
+      );
     } catch {
       setError("Something went wrong while loading logs.");
     } finally {
@@ -96,7 +102,11 @@ export default function AdminLogsPage() {
               }}
               className="rounded-2xl border border-purple-100 px-4 py-3"
             >
-              <option value="all">All events</option>
+              <option value="all">
+                {viewerIsSuperAdmin
+                  ? "All events"
+                  : "All managed events"}
+              </option>
 
               {events.map((event) => (
                 <option key={event.slug} value={event.slug}>
@@ -133,6 +143,23 @@ export default function AdminLogsPage() {
               </option>
               <option value="admin_created">Admin created</option>
               <option value="admin_updated">Admin updated</option>
+              <option value="event_admin_added">
+                Event admin added
+              </option>
+
+              <option value="event_admin_role_changed">
+                Event admin role changed
+              </option>
+
+              <option value="event_admin_removed">
+                Event admin removed
+              </option>
+
+              {viewerIsSuperAdmin && (
+                <option value="super_admin_status_changed">
+                  Super-admin status changed
+                </option>
+              )}
             </select>
           </div>
         </section>

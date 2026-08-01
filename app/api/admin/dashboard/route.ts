@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getAdminUser } from "@/lib/auth/get-admin-user";
-import { requireAdminForEvent } from "@/lib/auth/require-admin-for-event";
+import { getManagedEvents } from "@/lib/auth/get-managed-events";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 const LAGOS_TIME_ZONE = "Africa/Lagos";
@@ -67,7 +66,13 @@ function getDateLabel(dateKey: string, rangeDays: number) {
 
 export async function GET(request: NextRequest) {
   try {
-    const admin = await getAdminUser();
+    const requestedRange = Number(
+      request.nextUrl.searchParams.get("rangeDays") ?? "7"
+    );
+
+    const rangeDays = requestedRange === 30 ? 30 : 7;
+
+    const { admin, events } = await getManagedEvents();
 
     if (!admin) {
       return NextResponse.json(
@@ -76,41 +81,33 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!admin.is_super_admin) {
+    if (events.length === 0) {
       return NextResponse.json(
-        { error: "Not authorized." },
+        {
+          error:
+            "You do not have manager access to any active event."
+        },
         { status: 403 }
       );
     }
 
-    const eventSlug =
-      request.nextUrl.searchParams.get("eventSlug") ?? "abuja-2026";
+    const requestedEventSlug =
+      request.nextUrl.searchParams.get("eventSlug")?.trim();
 
-    const requestedRange = Number(
-      request.nextUrl.searchParams.get("rangeDays") ?? "7"
-    );
+    const event = requestedEventSlug
+      ? events.find(
+          (availableEvent) =>
+            availableEvent.slug === requestedEventSlug
+        )
+      : events[0];
 
-    const rangeDays = requestedRange === 30 ? 30 : 7;
-
-    const { data: event, error: eventError } = await supabaseAdmin
-      .from("events")
-      .select("id, name, slug, location, capacity")
-      .eq("slug", eventSlug)
-      .single();
-
-    if (eventError || !event) {
+    if (!event) {
       return NextResponse.json(
-        { error: "Event not found." },
-        { status: 404 }
-      );
-    }
-
-    const access = await requireAdminForEvent(event.id);
-
-    if (!access.allowed) {
-      return NextResponse.json(
-        { error: access.error },
-        { status: access.status }
+        {
+          error:
+            "You do not have manager access to the selected event."
+        },
+        { status: 403 }
       );
     }
 
@@ -433,6 +430,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       event,
+      availableEvents: events.map((availableEvent) => ({
+        id: availableEvent.id,
+        name: availableEvent.name,
+        slug: availableEvent.slug,
+        location: availableEvent.location
+      })),
+      viewer: {
+        isSuperAdmin: admin.is_super_admin
+      },
       rangeDays,
       metrics: {
         totalRevenue,

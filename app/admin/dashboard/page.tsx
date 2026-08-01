@@ -18,11 +18,6 @@ import {
 
 import { AdminShell } from "@/components/AdminShell";
 
-const EVENTS = [
-  { slug: "abuja-2026", label: "STAR Camp Abuja" },
-  { slug: "owerri-2026", label: "STAR Camp Owerri" }
-];
-
 const TEAM_CHART_COLOURS = [
   "#6D28D9",
   "#9333EA",
@@ -59,6 +54,16 @@ type RegistrationStatusItem = {
 };
 
 type DashboardData = {
+  availableEvents: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    location: string;
+  }>;
+
+  viewer: {
+    isSuperAdmin: boolean;
+  };
   event: {
     id: string;
     name: string;
@@ -117,7 +122,7 @@ function formatNaira(value: number) {
 }
 
 export default function AdminDashboardPage() {
-  const [eventSlug, setEventSlug] = useState("abuja-2026");
+  const [eventSlug, setEventSlug] = useState("");
   const [rangeDays, setRangeDays] = useState<RangeDays>(7);
 
   const [data, setData] = useState<DashboardData | null>(null);
@@ -129,10 +134,16 @@ export default function AdminDashboardPage() {
       setLoading(true);
       setError(null);
 
+      const params = new URLSearchParams({
+        rangeDays: String(rangeDays)
+      });
+
+      if (eventSlug) {
+        params.set("eventSlug", eventSlug);
+      }
+
       const response = await fetch(
-        `/api/admin/dashboard?eventSlug=${encodeURIComponent(
-          eventSlug
-        )}&rangeDays=${rangeDays}`
+        `/api/admin/dashboard?${params.toString()}`
       );
 
       const result = await response.json();
@@ -153,6 +164,10 @@ export default function AdminDashboardPage() {
       }
 
       setData(result);
+
+      if (!eventSlug && result.event?.slug) {
+        setEventSlug(result.event.slug);
+      }
     } catch {
       setError("Something went wrong.");
     } finally {
@@ -199,14 +214,19 @@ export default function AdminDashboardPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <select
               value={eventSlug}
+              disabled={!data || data.availableEvents.length === 0}
               onChange={(event) =>
                 setEventSlug(event.target.value)
               }
-              className="rounded-2xl border border-purple-100 bg-white px-4 py-3"
+              className="rounded-2xl border border-purple-100 bg-white px-4 py-3 disabled:opacity-60"
             >
-              {EVENTS.map((event) => (
-                <option key={event.slug} value={event.slug}>
-                  {event.label}
+              {!eventSlug && (
+                <option value="">Loading events...</option>
+              )}
+
+              {data?.availableEvents.map((event) => (
+                <option key={event.id} value={event.slug}>
+                  {event.name}
                 </option>
               ))}
             </select>

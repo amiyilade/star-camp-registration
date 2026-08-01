@@ -14,7 +14,16 @@ export async function getManagedEvents() {
   if (admin.is_super_admin) {
     const { data: events, error } = await supabaseAdmin
       .from("events")
-      .select("id, name, slug, location, is_active")
+      .select(`
+        id,
+        name,
+        slug,
+        location,
+        capacity,
+        date_start,
+        date_end,
+        is_active
+      `)
       .eq("is_active", true)
       .order("name");
 
@@ -37,6 +46,9 @@ export async function getManagedEvents() {
         name,
         slug,
         location,
+        capacity,
+        date_start,
+        date_end,
         is_active
       )
     `)
@@ -56,7 +68,12 @@ export async function getManagedEvents() {
           ? role.events[0]
           : role.events;
       })
-      .filter(Boolean) ?? [];
+      .filter(
+        (
+          event
+        ): event is NonNullable<typeof event> =>
+          Boolean(event)
+      ) ?? [];
 
   return {
     admin,
