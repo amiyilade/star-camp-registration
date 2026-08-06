@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { supabaseAdmin } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 type TicketPageProps = {
   params: Promise<{
@@ -7,20 +10,44 @@ type TicketPageProps = {
 };
 
 async function getTicket(token: string) {
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const { data: ticket, error } = await supabaseAdmin
+    .from("tickets")
+    .select(`
+      id,
+      ticket_code,
+      qr_token,
+      status,
+      checked_in_at,
+      checked_out_at,
+      attendees (
+        first_name,
+        last_name,
+        email,
+        department
+      ),
+      events (
+        name,
+        location,
+        date_start,
+        date_end
+      ),
+      registration_orders (
+        status
+      )
+    `)
+    .eq("qr_token", token)
+    .maybeSingle();
 
-  const response = await fetch(`${appUrl}/api/tickets/${token}`, {
-    cache: "no-store"
-  });
+  if (error) {
+    console.error("Public ticket lookup failed:", {
+      token,
+      error
+    });
 
-  if (!response.ok) {
     return null;
   }
 
-  const data = await response.json();
-
-  return data.ticket;
+  return ticket;
 }
 
 export default async function TicketPage({ params }: TicketPageProps) {
