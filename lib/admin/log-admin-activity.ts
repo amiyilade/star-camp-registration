@@ -12,7 +12,11 @@ type AdminActivityAction =
   | "event_admin_added"
   | "event_admin_role_changed"
   | "event_admin_removed"
-  | "super_admin_status_changed";
+  | "super_admin_status_changed"
+  | "order_fulfillment_repaired"
+  | "order_fulfillment_failed"
+  | "tickets_generated"
+  | "ticket_email_failed";
 
 type AdminActivityOutcome =
   | "success"
