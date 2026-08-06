@@ -141,6 +141,21 @@ export default function AdminLogsPage() {
               <option value="ticket_resend_failed">
                 Ticket resend failed
               </option>
+              <option value="order_fulfillment_repaired">
+                Order fulfillment repaired
+              </option>
+
+              <option value="order_fulfillment_failed">
+                Order fulfillment failed
+              </option>
+
+              <option value="tickets_generated">
+                Tickets generated
+              </option>
+
+              <option value="ticket_email_failed">
+                Ticket email failed
+              </option>
               <option value="admin_created">Admin created</option>
               <option value="admin_updated">Admin updated</option>
               <option value="event_admin_added">

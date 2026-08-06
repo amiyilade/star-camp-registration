@@ -53,9 +53,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     loadAdmin();
   }, []);
 
-  const isSuperAdmin =
-    adminContext?.permissions?.isSuperAdmin ?? false;
-
   const canViewDashboard =
     adminContext?.permissions?.canViewDashboard ?? false;
 
@@ -67,7 +64,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     ...(canViewDashboard
-      ? [{ href: "/admin/dashboard", label: "Dashboard" }]
+      ? [
+          {
+            href: "/admin/dashboard",
+            label: "Dashboard"
+          },
+          {
+            href: "/admin/orders",
+            label: "Orders"
+          }
+        ]
       : []),
 
     { href: "/admin/scan", label: "Scanner" },
