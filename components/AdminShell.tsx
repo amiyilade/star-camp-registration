@@ -72,6 +72,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {
             href: "/admin/orders",
             label: "Orders"
+          },
+          {
+            href: "/admin/payment-settings",
+            label: "Payment Settings"
           }
         ]
       : []),

@@ -16,7 +16,8 @@ type AdminActivityAction =
   | "order_fulfillment_repaired"
   | "order_fulfillment_failed"
   | "tickets_generated"
-  | "ticket_email_failed";
+  | "ticket_email_failed"
+  | "payment_settings_updated";
 
 type AdminActivityOutcome =
   | "success"

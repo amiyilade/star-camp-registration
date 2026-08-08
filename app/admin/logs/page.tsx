@@ -169,6 +169,9 @@ export default function AdminLogsPage() {
               <option value="event_admin_removed">
                 Event admin removed
               </option>
+              <option value="payment_settings_updated">
+                Payment settings updated
+              </option>
 
               {viewerIsSuperAdmin && (
                 <option value="super_admin_status_changed">
