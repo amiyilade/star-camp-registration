@@ -89,7 +89,9 @@ export async function POST(request: Request) {
     }
 
     const unitPrice = event.price_ngn;
-    const totalAmount = unitPrice * normalised.order.ticket_quantity;
+    const grossAmount = unitPrice * normalised.order.ticket_quantity;
+    const sponsorshipAmount = 0;
+    const amountDue = grossAmount - sponsorshipAmount;
     const publicReference = generatePublicReference(
       normalised.order.event_slug
     );
@@ -155,7 +157,9 @@ export async function POST(request: Request) {
         buyer_phone_number: normalised.order.buyer_phone_number,
         ticket_quantity: normalised.order.ticket_quantity,
         unit_price_ngn: unitPrice,
-        total_amount_ngn: totalAmount,
+        total_amount_ngn: grossAmount,
+        sponsorship_amount_ngn: sponsorshipAmount,
+        amount_due_ngn: amountDue,
         public_reference: publicReference,
         status: "draft",
         form_version: normalised.order.form_version
@@ -209,14 +213,17 @@ export async function POST(request: Request) {
     try {
       paystack = await initializePaystackTransaction({
         email: normalised.order.buyer_email,
-        amountKobo: totalAmount * 100,
+        amountKobo: amountDue * 100,
         reference: paystackReference,
         callbackUrl: `${appUrl}/payment/callback`,
         metadata: {
           order_id: order.id,
           public_reference: order.public_reference,
           event_slug: normalised.order.event_slug,
-          ticket_quantity: normalised.order.ticket_quantity
+          ticket_quantity: normalised.order.ticket_quantity,
+          gross_amount_ngn: grossAmount,
+          sponsorship_amount_ngn: sponsorshipAmount,
+          amount_due_ngn: amountDue
         }
       });
     } catch (error) {
