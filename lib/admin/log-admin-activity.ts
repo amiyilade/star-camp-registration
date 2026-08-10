@@ -17,7 +17,13 @@ type AdminActivityAction =
   | "order_fulfillment_failed"
   | "tickets_generated"
   | "ticket_email_failed"
-  | "payment_settings_updated";
+  | "payment_settings_updated"
+  | "sponsorship_campaign_created"
+  | "sponsorship_campaign_updated"
+  | "sponsorship_code_created"
+  | "sponsorship_code_updated"
+  | "sponsorship_email_added"
+  | "sponsorship_email_removed";
 
 type AdminActivityOutcome =
   | "success"
