@@ -158,6 +158,7 @@ export async function POST(request: Request) {
         ticket_quantity: normalised.order.ticket_quantity,
         unit_price_ngn: unitPrice,
         total_amount_ngn: grossAmount,
+        gross_amount_ngn: grossAmount,
         sponsorship_amount_ngn: sponsorshipAmount,
         amount_due_ngn: amountDue,
         public_reference: publicReference,
