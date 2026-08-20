@@ -4,17 +4,17 @@ import { EVENTS } from "@/lib/events";
 function calculateAge(dateOfBirth?: string) {
   if (!dateOfBirth) return null;
 
-  const today = new Date();
+  const cutoff = new Date("2026-08-31");
   const birthDate = new Date(dateOfBirth);
 
   if (Number.isNaN(birthDate.getTime())) return null;
 
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
+  let age = cutoff.getFullYear() - birthDate.getFullYear();
+  const monthDiff = cutoff.getMonth() - birthDate.getMonth();
 
   if (
     monthDiff < 0 ||
-    (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    (monthDiff === 0 && cutoff.getDate() < birthDate.getDate())
   ) {
     age--;
   }
@@ -51,6 +51,24 @@ export function normaliseRegistrationForDatabase(data: RegistrationFormData) {
       status: "draft",
       form_version: 1
     },
+
+    sponsorship: data.sponsorship?.code
+      ? {
+          code:
+            data.sponsorship.code
+              .trim()
+              .toUpperCase()
+              .replace(/\s+/g, ""),
+
+          attendee_indexes:
+            Array.from(
+              new Set(
+                data.sponsorship
+                  .attendeeIndexes ?? []
+              )
+            )
+        }
+      : null,
 
     attendees: data.attendees.map((attendee) => {
       const age = calculateAge(attendee.dateOfBirth);

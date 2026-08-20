@@ -242,7 +242,8 @@ export default function RegistrationForm() {
       eventSlug: "abuja-2026",
       ticketQuantity: 1,
       buyer: { fullName: "", email: "", phone: { ...defaultPhone } },
-      attendees: [emptyAttendee()]
+      attendees: [emptyAttendee()],
+      sponsorship: { code: "", attendeeIndexes: [] },
     }
   });
 
@@ -259,6 +260,45 @@ export default function RegistrationForm() {
   const [acknowledgedDuplicateIndexes, setAcknowledgedDuplicateIndexes] = useState<number[]>([]);
   const hasUnacknowledgedDuplicates = duplicateIndexes.some((index) => !acknowledgedDuplicateIndexes.includes(index));
 
+  type SponsorshipInspection = {
+    valid: boolean;
+    requiresAttendeeEmail: boolean;
+    fundingType:
+      | "fixed_per_attendee"
+      | "full_fee";
+    fundingValueNgn: number | null;
+  };
+
+  const [
+    sponsorshipEnabled,
+    setSponsorshipEnabled
+  ] = useState(false);
+
+  const [
+    sponsorshipCode,
+    setSponsorshipCode
+  ] = useState("");
+
+  const [
+    sponsorshipInspection,
+    setSponsorshipInspection
+  ] =
+    useState<SponsorshipInspection | null>(
+      null
+    );
+
+  const [
+    sponsorshipError,
+    setSponsorshipError
+  ] =
+    useState<string | null>(null);
+
+  const [
+    checkingSponsorship,
+    setCheckingSponsorship
+  ] =
+    useState(false);
+
   useEffect(() => {
     if (step === 4) {
       setReviewReady(false);
@@ -272,6 +312,73 @@ export default function RegistrationForm() {
 
     setReviewReady(false);
   }, [step]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPaymentOptions() {
+      try {
+        const response = await fetch(
+          `/api/payment-options?eventSlug=${encodeURIComponent(
+            eventSlug
+          )}`,
+          {
+            cache: "no-store"
+          }
+        );
+
+        const result =
+          await response.json();
+
+        if (
+          cancelled ||
+          !response.ok
+        ) {
+          return;
+        }
+
+        setSponsorshipEnabled(
+          Boolean(
+            result.sponsorshipEnabled
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Could not load payment options:",
+          error
+        );
+
+        if (!cancelled) {
+          setSponsorshipEnabled(false);
+        }
+      }
+    }
+
+    /*
+    * Changing camp invalidates any sponsorship
+    * previously inspected for another event.
+    */
+    setSponsorshipInspection(null);
+    setSponsorshipError(null);
+    setSponsorshipCode("");
+
+    setValue(
+      "sponsorship",
+      {
+        code: "",
+        attendeeIndexes: []
+      }
+    );
+
+    loadPaymentOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    eventSlug,
+    setValue
+  ]);
 
   function recheckAttendeePhones(index: number) {
     const attendee = form.getValues(`attendees.${index}`);
@@ -339,6 +446,38 @@ export default function RegistrationForm() {
 
     if (step === 2) {
       const attendees = form.getValues("attendees");
+
+      const sponsoredIndexes =
+        form.getValues(
+          "sponsorship.attendeeIndexes"
+        ) ?? [];
+
+      if (
+        sponsorshipInspection
+          ?.requiresAttendeeEmail
+      ) {
+        for (
+          const index of sponsoredIndexes
+        ) {
+          const email =
+            attendees[index]?.email?.trim();
+
+          if (!email) {
+            form.setError(
+              `attendees.${index}.email`,
+              {
+                type: "manual",
+                message:
+                  "Email is required for this sponsorship."
+              }
+            );
+
+            setStep(2);
+
+            return;
+          }
+        }
+      }
 
       fieldsToValidate = attendees.flatMap((attendee, index) => {
         const age = calculateAge(attendee.dateOfBirth);
@@ -446,7 +585,108 @@ export default function RegistrationForm() {
     setValue(`attendees.${index}.authorizedPickup`, previous.authorizedPickup);
   }
 
+  async function inspectSponsorship() {
+    const code =
+      sponsorshipCode
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "");
 
+    if (!code) {
+      setSponsorshipError(
+        "Enter a sponsorship code."
+      );
+
+      return;
+    }
+
+    try {
+      setCheckingSponsorship(true);
+      setSponsorshipError(null);
+      setSponsorshipInspection(null);
+
+      const response = await fetch(
+        "/api/sponsorships/inspect",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: JSON.stringify({
+            eventSlug,
+            code
+          })
+        }
+      );
+
+      const result =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !result.valid
+      ) {
+        setValue(
+          "sponsorship",
+          {
+            code: "",
+            attendeeIndexes: []
+          }
+        );
+
+        setSponsorshipError(
+          result.error ??
+            "This sponsorship code is invalid or unavailable."
+        );
+
+        return;
+      }
+
+      setSponsorshipCode(code);
+
+      setSponsorshipInspection({
+        valid: true,
+
+        requiresAttendeeEmail:
+          Boolean(
+            result.requiresAttendeeEmail
+          ),
+
+        fundingType:
+          result.fundingType,
+
+        fundingValueNgn:
+          result.fundingValueNgn ??
+          null
+      });
+
+      /*
+      * Store the accepted code in form state.
+      * Attendee selection happens separately.
+      */
+      setValue(
+        "sponsorship.code",
+        code,
+        {
+          shouldDirty: true
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Sponsorship inspection failed:",
+        error
+      );
+
+      setSponsorshipError(
+        "Could not check the sponsorship code. Please try again."
+      );
+    } finally {
+      setCheckingSponsorship(false);
+    }
+  }
 
   const steps = ["Camp", "Buyer", "Attendees", "Consent", "Review"];
 
@@ -624,6 +864,100 @@ export default function RegistrationForm() {
               <section>
                 <h2 className="text-3xl font-semibold text-royalDark">Attendee details</h2>
                 <p className="mt-2 text-muted">Complete details for each ticket.</p>
+                {sponsorshipEnabled && (
+                  <div className="mt-6 rounded-3xl border border-purple-100 bg-lavender/40 p-5">
+                    <p className="font-semibold text-royalDark">
+                      Have a sponsorship code?
+                    </p>
+
+                    <p className="mt-1 text-sm text-muted">
+                      Enter the code provided by your sponsor.
+                    </p>
+
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                      <TextInput
+                        value={sponsorshipCode}
+                        disabled={
+                          checkingSponsorship
+                        }
+                        onChange={(event) => {
+                          setSponsorshipCode(
+                            event.target.value
+                              .toUpperCase()
+                              .replace(/\s+/g, "")
+                          );
+
+                          /*
+                          * Editing an accepted code invalidates
+                          * the previous inspection.
+                          */
+                          if (
+                            sponsorshipInspection
+                          ) {
+                            setSponsorshipInspection(
+                              null
+                            );
+
+                            setValue(
+                              "sponsorship",
+                              {
+                                code: "",
+                                attendeeIndexes: []
+                              }
+                            );
+                          }
+
+                          setSponsorshipError(null);
+                        }}
+                        placeholder="Enter sponsorship code"
+                      />
+
+                      <button
+                        type="button"
+                        disabled={
+                          checkingSponsorship ||
+                          !sponsorshipCode.trim()
+                        }
+                        onClick={
+                          inspectSponsorship
+                        }
+                        className="shrink-0 rounded-full bg-royal px-6 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {checkingSponsorship
+                          ? "Checking..."
+                          : "Apply code"}
+                      </button>
+                    </div>
+
+                    {sponsorshipError && (
+                      <p className="mt-3 text-sm font-medium text-red-600">
+                        {sponsorshipError}
+                      </p>
+                    )}
+
+                    {sponsorshipInspection?.valid && (
+                      <div className="mt-4 rounded-2xl bg-white p-4">
+                        <p className="font-semibold text-green-700">
+                          Sponsorship code accepted
+                        </p>
+
+                        <p className="mt-1 text-sm text-muted">
+                          {sponsorshipInspection.fundingType ===
+                          "full_fee"
+                            ? "Eligible attendees may receive full registration sponsorship."
+                            : `Eligible attendees may receive ${money(
+                                sponsorshipInspection.fundingValueNgn ??
+                                  0
+                              )} toward registration.`}
+                        </p>
+
+                        <p className="mt-2 text-sm text-muted">
+                          Select the attendee or attendees this sponsorship should apply to below.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="mt-8 space-y-8">
                   {fields.map((field, index) => {
                     const age = calculateAge(attendees?.[index]?.dateOfBirth);
@@ -647,10 +981,88 @@ export default function RegistrationForm() {
                             <FieldError message={errors.attendees?.[index]?.lastName?.message} />
                           </div>
                           <div>
-                            <Label>Email optional</Label>
+                            <Label>
+                              {sponsorshipInspection?.requiresAttendeeEmail &&
+                              (
+                                watch(
+                                  "sponsorship.attendeeIndexes"
+                                ) ?? []
+                              ).includes(index)
+                                ? "Email required for sponsorship"
+                                : "Email optional"}
+                            </Label>
                             <TextInput {...register(`attendees.${index}.email`)} type="email" />
                             <FieldError message={errors.attendees?.[index]?.email?.message} />
+                            {sponsorshipInspection?.requiresAttendeeEmail &&
+                              (
+                                watch(
+                                  "sponsorship.attendeeIndexes"
+                                ) ?? []
+                              ).includes(index) && (
+                                <p className="mt-1 text-xs text-muted">
+                                  This email will be checked against the sponsorship eligibility list.
+                                </p>
+                            )}
                           </div>
+                          {sponsorshipInspection?.valid && (
+                            <div className="md:col-span-2">
+                              <label className="flex items-start gap-3 rounded-2xl border border-purple-100 bg-lavender/50 p-4">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    watch(
+                                      "sponsorship.attendeeIndexes"
+                                    )?.includes(index) ??
+                                    false
+                                  }
+                                  onChange={(event) => {
+                                    const current =
+                                      form.getValues(
+                                        "sponsorship.attendeeIndexes"
+                                      ) ?? [];
+
+                                    if (event.target.checked) {
+                                      setValue(
+                                        "sponsorship.attendeeIndexes",
+                                        Array.from(
+                                          new Set([
+                                            ...current,
+                                            index
+                                          ])
+                                        ),
+                                        {
+                                          shouldDirty: true
+                                        }
+                                      );
+                                    } else {
+                                      setValue(
+                                        "sponsorship.attendeeIndexes",
+                                        current.filter(
+                                          (item) =>
+                                            item !== index
+                                        ),
+                                        {
+                                          shouldDirty: true
+                                        }
+                                      );
+                                    }
+                                  }}
+                                />
+
+                                <span>
+                                  <span className="block font-semibold text-royalDark">
+                                    Apply sponsorship to this attendee
+                                  </span>
+
+                                  {sponsorshipInspection.requiresAttendeeEmail && (
+                                    <span className="mt-1 block text-xs text-muted">
+                                      This attendee must use an approved email address.
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
+                            </div>
+                          )}
                           <div>
                             <Label>Phone number</Label>
                             <PhoneInput control={control} prefix={`attendees.${index}.phone`} error={errors.attendees?.[index]?.phone} onAfterChange={() => recheckAttendeePhones(index)} />

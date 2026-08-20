@@ -165,6 +165,20 @@ export const attendeeSchema = z
     }
   });
 
+const sponsorshipRequestSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .max(40, "Sponsorship code is too long")
+    .optional()
+    .or(z.literal("")),
+
+  attendeeIndexes: z
+    .array(z.number().int().min(0).max(9))
+    .max(10)
+    .default([])
+});
+
 export const registrationSchema = z.object({
   eventSlug: z.string().min(1, "Choose camp location"),
   ticketQuantity: z.coerce.number().min(1).max(10),
@@ -174,7 +188,79 @@ export const registrationSchema = z.object({
     phone: phoneSchema
   }),
   attendees: z.array(attendeeSchema).min(1).max(10),
+  sponsorship: sponsorshipRequestSchema.optional(),
   duplicateOverrideAttendeeIndexes: z.array(z.number()).optional()
-});
+})
+
+.superRefine((data, ctx) => {
+    const sponsorship = data.sponsorship;
+
+    if (!sponsorship) {
+      return;
+    }
+
+    const code =
+      sponsorship.code?.trim() ?? "";
+
+    const indexes =
+      sponsorship.attendeeIndexes ?? [];
+
+    /*
+     * A submitted sponsorship code must actually be
+     * attached to at least one attendee.
+     */
+    if (code && indexes.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [
+          "sponsorship",
+          "attendeeIndexes"
+        ],
+        message:
+          "Select at least one attendee for this sponsorship."
+      });
+    }
+
+    /*
+     * Reject duplicate attendee indexes.
+     */
+    if (
+      new Set(indexes).size !==
+      indexes.length
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [
+          "sponsorship",
+          "attendeeIndexes"
+        ],
+        message:
+          "The same attendee cannot be selected more than once."
+      });
+    }
+
+    /*
+     * Every selected attendee index must correspond
+     * to a real attendee on this registration.
+     */
+    for (const index of indexes) {
+      if (
+        index < 0 ||
+        index >= data.attendees.length
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [
+            "sponsorship",
+            "attendeeIndexes"
+          ],
+          message:
+            "Invalid sponsored attendee selection."
+        });
+
+        break;
+      }
+    }
+  });
 
 export type RegistrationFormData = z.infer<typeof registrationSchema>;
