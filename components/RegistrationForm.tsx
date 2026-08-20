@@ -299,6 +299,35 @@ export default function RegistrationForm() {
   ] =
     useState(false);
 
+  const sponsoredAttendeeIndexes =
+    watch(
+      "sponsorship.attendeeIndexes"
+    ) ?? [];
+
+  const estimatedSponsorshipPerAttendee =
+    sponsorshipInspection?.valid
+      ? sponsorshipInspection
+          .fundingType ===
+        "full_fee"
+        ? selectedEvent.price
+        : Math.min(
+            sponsorshipInspection
+              .fundingValueNgn ?? 0,
+            selectedEvent.price
+          )
+      : 0;
+
+  const estimatedSponsorshipAmount =
+    estimatedSponsorshipPerAttendee *
+    sponsoredAttendeeIndexes.length;
+
+  const estimatedAmountDue =
+    Math.max(
+      total -
+        estimatedSponsorshipAmount,
+      0
+    );
+
   useEffect(() => {
     if (step === 4) {
       setReviewReady(false);
@@ -674,6 +703,16 @@ export default function RegistrationForm() {
           shouldDirty: true
         }
       );
+
+      if (Number(ticketQuantity) === 1) {
+        setValue(
+          "sponsorship.attendeeIndexes",
+          [0],
+          {
+            shouldDirty: true
+          }
+        );
+      }
     } catch (error) {
       console.error(
         "Sponsorship inspection failed:",
@@ -744,7 +783,31 @@ export default function RegistrationForm() {
               <p className="font-semibold text-royalDark">Order summary</p>
               <p className="mt-2">Tickets: {ticketQuantity || 1}</p>
               <p>Price: {money(selectedEvent.price)} each</p>
-              <p className="mt-2 text-lg font-semibold text-royalDark">Total: {money(total)}</p>
+              {sponsorshipInspection?.valid && estimatedSponsorshipAmount > 0 ? (
+                <>
+                  <p className="mt-3">
+                    Gross: {money(total)}
+                  </p>
+
+                  <p className="mt-1 text-green-700">
+                    Sponsorship: -
+                    {money(
+                      estimatedSponsorshipAmount
+                    )}
+                  </p>
+
+                  <p className="mt-3 text-lg font-semibold text-royalDark">
+                    Estimated amount due:{" "}
+                    {money(
+                      estimatedAmountDue
+                    )}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-lg font-semibold text-royalDark">
+                  Total: {money(total)}
+                </p>
+              )}
             </div>
           </aside>
 
@@ -952,7 +1015,9 @@ export default function RegistrationForm() {
                         </p>
 
                         <p className="mt-2 text-sm text-muted">
-                          Select the attendee or attendees this sponsorship should apply to below.
+                          {Number(ticketQuantity) === 1
+                            ? "This sponsorship will be applied to Attendee 1."
+                            : "Select the attendee or attendees this sponsorship should apply to below."}
                         </p>
                       </div>
                     )}
@@ -1004,7 +1069,7 @@ export default function RegistrationForm() {
                                 </p>
                             )}
                           </div>
-                          {sponsorshipInspection?.valid && (
+                          {sponsorshipInspection?.valid && Number(ticketQuantity) > 1 && (
                             <div className="md:col-span-2">
                               <label className="flex items-start gap-3 rounded-2xl border border-purple-100 bg-lavender/50 p-4">
                                 <input
@@ -1204,7 +1269,38 @@ export default function RegistrationForm() {
                 <div className="mt-8 rounded-[2rem] bg-lavender p-6">
                   <p className="font-semibold text-royalDark">{selectedEvent.name}</p>
                   <p className="mt-2 text-muted">Buyer: {watch("buyer.fullName")} · {watch("buyer.email")}</p>
-                  <p className="mt-2 text-muted">Tickets: {ticketQuantity} · Total: {money(total)}</p>
+                  <p className="mt-2 text-muted">Tickets: {ticketQuantity}</p>
+
+                  {sponsorshipInspection?.valid && estimatedSponsorshipAmount > 0 ? (
+                    <div className="mt-3 space-y-1 text-sm">
+                      <p className="text-muted">
+                        Registration total:{" "}
+                        {money(total)}
+                      </p>
+
+                      <p className="font-medium text-green-700">
+                        Sponsorship: -
+                        {money(
+                          estimatedSponsorshipAmount
+                        )}
+                      </p>
+
+                      <p className="pt-1 text-base font-semibold text-royalDark">
+                        Estimated amount due:{" "}
+                        {money(
+                          estimatedAmountDue
+                        )}
+                      </p>
+
+                      <p className="pt-1 text-xs text-muted">
+                        Sponsorship eligibility is confirmed when you submit the registration.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-muted">
+                      Total: {money(total)}
+                    </p>
+                  )}
                 </div>
                 <div className="mt-6 space-y-4">
                   {attendees?.map((attendee, index) => (
@@ -1212,6 +1308,13 @@ export default function RegistrationForm() {
                       <p className="font-semibold text-royalDark">{index + 1}. {attendee.firstName} {attendee.lastName}</p>
                       <p className="mt-1 text-sm text-muted">{attendee.email || "Ticket will be sent to buyer email"}</p>
                       <p className="mt-1 text-sm text-muted">{attendee.department} · {attendee.residenceArea}</p>
+                      {(
+                        watch("sponsorship.attendeeIndexes") ?? []
+                      ).includes(index) && (
+                        <div className="mt-3 inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                          Sponsorship applied
+                        </div>
+                      )}
 
                       {duplicateIndexes.includes(index) && (
                         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left">

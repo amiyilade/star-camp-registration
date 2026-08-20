@@ -94,6 +94,7 @@ export async function POST(
           public_reference,
           status,
           total_amount_ngn,
+          amount_due_ngn,
           paystack_reference
         `)
         .eq("paystack_reference", reference)
@@ -114,10 +115,8 @@ export async function POST(
     try {
       validatePaystackTransaction({
         transaction,
-        expectedReference:
-          order.paystack_reference,
-        expectedAmountNgn:
-          order.total_amount_ngn
+        expectedReference: order.paystack_reference,
+        expectedAmountNgn: order.amount_due_ngn
       });
     } catch (error) {
       console.error(

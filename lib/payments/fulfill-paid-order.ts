@@ -32,6 +32,30 @@ export async function fulfillPaidOrder(orderId: string) {
     );
   }
 
+  const {
+    error: sponsorshipConfirmationError
+  } = await supabaseAdmin.rpc(
+    "confirm_order_sponsorship",
+    {
+      p_order_id: order.id
+    }
+  );
+
+  if (sponsorshipConfirmationError) {
+    console.error(
+      "Could not confirm sponsorship allocations:",
+      {
+        orderId: order.id,
+        error:
+          sponsorshipConfirmationError
+      }
+    );
+
+    throw new Error(
+      "Could not confirm sponsorship allocation."
+    );
+  }
+
   const ticketResult =
     await createTicketsForPaidOrder(order.id);
 

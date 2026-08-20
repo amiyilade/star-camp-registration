@@ -8,6 +8,7 @@ import {
   PaystackInitializationError
 } from "@/lib/paystack";
 import { generatePaystackReference } from "@/lib/generate-paystack-reference";
+import { fulfillPaidOrder } from "@/lib/payments/fulfill-paid-order";
 
 function getSafeErrorDetails(error: unknown) {
   if (error instanceof PaystackInitializationError) {
@@ -90,8 +91,8 @@ export async function POST(request: Request) {
 
     const unitPrice = event.price_ngn;
     const grossAmount = unitPrice * normalised.order.ticket_quantity;
-    const sponsorshipAmount = 0;
-    const amountDue = grossAmount - sponsorshipAmount;
+    let sponsorshipAmount = 0;
+    let amountDue = grossAmount;
     const publicReference = generatePublicReference(
       normalised.order.event_slug
     );
@@ -183,11 +184,15 @@ export async function POST(request: Request) {
       event_id: event.id
     }));
 
-    const { error: attendeesError } = await supabaseAdmin
+    const {
+      data: insertedAttendees,
+      error: attendeesError
+    } = await supabaseAdmin
       .from("attendees")
-      .insert(attendeesToInsert);
+      .insert(attendeesToInsert)
+      .select("id, email");
 
-    if (attendeesError) {
+    if (attendeesError || !insertedAttendees) {
       console.error("Attendee insert error:", attendeesError);
 
       await deleteRegistrationOrder(order.id);
@@ -196,6 +201,319 @@ export async function POST(request: Request) {
         { error: "Could not save attendee details." },
         { status: 500 }
       );
+    }
+
+    if (normalised.sponsorship) {
+      const selectedIndexes =
+        normalised.sponsorship
+          .attendee_indexes;
+
+      /*
+      * The schema has already checked that these
+      * indexes are valid, but never trust array
+      * access blindly when money is involved.
+      */
+      const selectedAttendees =
+        selectedIndexes.map(
+          (index) =>
+            insertedAttendees[index]
+        );
+
+      if (
+        selectedAttendees.some(
+          (attendee) => !attendee
+        )
+      ) {
+        console.error(
+          "Invalid sponsored attendee mapping:",
+          {
+            orderId: order.id,
+            selectedIndexes
+          }
+        );
+
+        await deleteRegistrationOrder(
+          order.id
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Could not apply sponsorship to the selected attendee."
+          },
+          { status: 400 }
+        );
+      }
+
+      const attendeeIds =
+        selectedAttendees.map(
+          (attendee) =>
+            attendee.id
+        );
+
+      const attendeeEmails =
+        selectedAttendees.map(
+          (attendee) =>
+            attendee.email ?? ""
+        );
+
+      const {
+        data: reservation,
+        error: reservationError
+      } = await supabaseAdmin.rpc(
+        "reserve_order_sponsorship",
+        {
+          p_event_id:
+            event.id,
+
+          p_order_id:
+            order.id,
+
+          p_code:
+            normalised.sponsorship.code,
+
+          p_attendee_ids:
+            attendeeIds,
+
+          p_attendee_emails:
+            attendeeEmails,
+
+          p_unit_price_ngn:
+            unitPrice
+        }
+      );
+
+      if (
+        reservationError ||
+        !reservation
+      ) {
+        console.warn(
+          "Sponsorship reservation failed:",
+          {
+            orderId:
+              order.id,
+
+            code:
+              normalised.sponsorship.code,
+
+            error:
+              reservationError
+          }
+        );
+
+        /*
+        * Deleting the order also deletes attendees
+        * and any allocations via ON DELETE CASCADE.
+        */
+        await deleteRegistrationOrder(
+          order.id
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "The sponsorship could not be applied. It may be unavailable or the selected attendee may not be eligible. Please check the sponsorship details and try again."
+          },
+          { status: 409 }
+        );
+      }
+
+      const reservationResult =
+        reservation as {
+          totalSponsorshipNgn?: number;
+        };
+
+      sponsorshipAmount =
+        Number(
+          reservationResult
+            .totalSponsorshipNgn ?? 0
+        );
+
+      if (
+        !Number.isInteger(
+          sponsorshipAmount
+        ) ||
+        sponsorshipAmount < 0 ||
+        sponsorshipAmount >
+          grossAmount
+      ) {
+        console.error(
+          "Invalid sponsorship amount returned by database:",
+          {
+            orderId:
+              order.id,
+
+            sponsorshipAmount,
+            grossAmount,
+            reservation
+          }
+        );
+
+        await deleteRegistrationOrder(
+          order.id
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Could not calculate the sponsorship amount."
+          },
+          { status: 500 }
+        );
+      }
+
+      amountDue =
+        grossAmount -
+        sponsorshipAmount;
+
+      const {
+        error: pricingUpdateError
+      } = await supabaseAdmin
+        .from("registration_orders")
+        .update({
+          sponsorship_amount_ngn:
+            sponsorshipAmount,
+
+          amount_due_ngn:
+            amountDue
+        })
+        .eq("id", order.id);
+
+      if (pricingUpdateError) {
+        console.error(
+          "Could not persist sponsored order pricing:",
+          {
+            orderId:
+              order.id,
+            error:
+              pricingUpdateError
+          }
+        );
+
+        await deleteRegistrationOrder(
+          order.id
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Could not save sponsorship pricing."
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (amountDue === 0) {
+      const paidAt = new Date().toISOString();
+
+      const {
+        error: paidUpdateError
+      } = await supabaseAdmin
+        .from("registration_orders")
+        .update({
+          status: "paid",
+          paid_at: paidAt
+        })
+        .eq("id", order.id);
+
+      if (paidUpdateError) {
+        console.error(
+          "Could not mark fully sponsored order as paid:",
+          {
+            orderId:
+              order.id,
+
+            error:
+              paidUpdateError
+          }
+        );
+
+        /*
+        * No external payment exists, so deleting
+        * the draft is safe here.
+        */
+        await deleteRegistrationOrder(
+          order.id
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Could not complete the sponsored registration."
+          },
+          { status: 500 }
+        );
+      }
+
+      try {
+        const fulfillment = await fulfillPaidOrder(order.id);
+
+        return NextResponse.json(
+          {
+            message:
+              "Registration completed with full sponsorship.",
+
+            orderId:
+              order.id,
+
+            publicReference:
+              order.public_reference,
+
+            paymentRequired:
+              false,
+
+            fullySponsored:
+              true,
+
+            pricing: {
+              grossAmountNgn:
+                grossAmount,
+
+              sponsorshipAmountNgn:
+                sponsorshipAmount,
+
+              amountDueNgn: 0
+            },
+
+            fulfillment
+          },
+          { status: 201 }
+        );
+      } catch (error) {
+        /*
+        * The order is already legitimately paid via
+        * sponsorship. Do NOT delete it now.
+        */
+        console.error(
+          "Fully sponsored order fulfillment failed:",
+          {
+            orderId:
+              order.id,
+            error
+          }
+        );
+
+        return NextResponse.json(
+          {
+            message:
+              "Your sponsored registration was completed, but ticket delivery is still being processed.",
+
+            orderId:
+              order.id,
+
+            publicReference:
+              order.public_reference,
+
+            paymentRequired:
+              false,
+
+            fullySponsored:
+              true
+          },
+          { status: 201 }
+        );
+      }
     }
 
     const paystackReference = generatePaystackReference(
